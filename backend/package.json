@@ -1,0 +1,21 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "esbuild ./handlers/tts.ts --bundle --sourcemap --platform=node --target=es2020 --outdir=build",
+    "dev": "node --env-file=../.env local-server.ts",
+    "smoke": "node smoke-test.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "microsoft-cognitiveservices-speech-sdk": "^1.30.1",
+    "openai": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.2",
+    "esbuild": "^0.18.13",
+    "typescript": "^5.1.6"
+  }
+}

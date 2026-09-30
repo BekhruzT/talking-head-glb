@@ -1,0 +1,7 @@
+{
+  "name": "talking-head-glb",
+  "private": true,
+  "scripts": {
+    "setup:model": "node scripts/setup-model.mjs"
+  }
+}

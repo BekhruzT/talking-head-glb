@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- This page is normally opened straight off disk, where Chrome will happily
+     serve a cached copy after the file has been edited -- so an edit looks like
+     it did not take. cases.js and scores.js are regenerated far more often than
+     this file, which makes stale caching the default failure. -->
+<meta http-equiv="cache-control" content="no-store">
+<title>Lip-sync eval: reference vs generation</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; background: #f5f6fa; color: #1d2330; }
+  header { padding: 20px 28px 14px; background: #fff; border-bottom: 1px solid #e3e6ee; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  header p { margin: 2px 0; font-size: 13px; color: #5a6172; max-width: 980px; }
+  header code { background: #eef0f6; padding: 1px 5px; border-radius: 4px; }
+  details summary { font-size: 12px; color: #5a6172; cursor: pointer; width: fit-content; margin-top: 8px; }
+  details p:first-of-type { margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border-bottom: 1px solid #e3e6ee; padding: 12px 14px; text-align: left; vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #5a6172; background: #fbfbfd; }
+  tr:nth-child(even) td { background: #fbfbfd; }
+  .case-id { font-weight: 600; font-size: 13px; }
+  .case-text { font-size: 13px; color: #333b4e; max-width: 340px; line-height: 1.45; margin-top: 4px; }
+  .case-meta { font-size: 11px; color: #8a90a3; margin-top: 6px; }
+  video { width: 300px; border-radius: 8px; background: #000; display: block; }
+  .missing { width: 300px; height: 170px; border: 2px dashed #c9cede; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #8a90a3; font-size: 12px; text-align: center; padding: 10px; }
+  .score { min-width: 190px; }
+  .score-value { font-size: 22px; font-weight: 700; line-height: 1.15; }
+  .score-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #8a90a3; margin-left: 7px; }
+  .score-detail { font-size: 11px; color: #5a6172; margin: 6px 0 8px; }
+  .status { font-size: 12px; color: #8a90a3; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Lip-sync eval</h1>
+  <p id="corpus-switch"></p>
+  <details>
+  <summary>What these scores mean</summary>
+  <p><b>Reference</b>: real human blendshape capture replayed on the avatar with the human's own audio.
+     <b>Generation</b>: drop videos into <code>eval/generation/&lt;caseId&gt;.mp4</code> (e.g. <code>generation/case01.mp4</code>) and reload &mdash; they are picked up by name.</p>
+  <p>Scores are computed by <code>node eval/metric-probe.mjs</code> and read from <code>eval/scores.js</code>; the videos here are for watching, not for measuring. They are scored off the blendshape streams the videos are rendered from, because the pixels are too lossy to score on: a mouth-box luminance curve tracks its own audio at only r&nbsp;=&nbsp;0.44, which caps any comparison between the columns well below anything useful.</p>
+  <p><b>Timing</b> &mdash; does the mouth do the same thing at the same point in the sentence? The two streams are put on a common clock using <b>word boundaries</b> (exact from Azure's synthesiser, recognised for the human recording), then correlated across four articulators that survive the trip between the two different solvers: mouthPucker, mouthShrugUpper, mouthLowerDownRight, mouthClose. Word anchors rather than a fitted warp, because warping one audio envelope onto the other lets a <i>wrong sentence</i> half-fit; on ground-truth anchors it scores 0.03.</p>
+  <p><b>Scale.</b> 10 = 0.936, what two Azure renderings of the same words in different styles score &mdash; as close as two takes of one sentence get. The deliberately wrong answers land at 0.03 (wrong sentence), &minus;0.07 (reversed) and 0.00 (noise), and every real pair beats every wrong one.</p>
+  <p><b>Lag</b> &mdash; the shift still left after the words line up, so it is the pipeline moving the mouth early or late <i>within</i> the words. Positive is late. <b>Expressiveness</b> &mdash; how far the mouth travels, not when: the generation's excursion over the human's on the same channels, kept out of timing so the two failures never hide each other.</p>
+  <p>Watching the videos works by double-clicking this file; nothing here needs a server any more.</p>
+  </details>
+</header>
+<table>
+  <thead><tr><th style="width:360px">Case</th><th>Reference (human capture)</th><th>Generation (latest pipeline)</th><th>Timing &amp; expressiveness</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<script>
+// Which corpus: ?corpus=inputs2 (3D-ETF, default) or ?corpus=inputs (BEAT).
+// Case ids differ (case01.. vs etf01..), so both share reference/ and
+// generation/ without colliding. 3D-ETF is the default because BEAT's face
+// track is not a lip-sync ground truth (see eval/README.md) and only the 3D-ETF
+// captures were recorded with the idle layer off -- the BEAT videos still blink
+// and move, motion you cannot tell from articulation by eye.
+const CORPUS = /^inputs2?$/.test(new URLSearchParams(location.search).get("corpus") ?? "")
+  ? new URLSearchParams(location.search).get("corpus")
+  : "inputs2";
+
+// Injected as a <script> rather than fetched: fetch/XHR/ES-modules are all
+// blocked on file:// by CORS, so a manifest loaded that way would leave the
+// page empty when this file is opened straight off disk. Script tags are not.
+function loadScript(src) {
+  return new Promise((ok, bad) => {
+    const s = document.createElement("script");
+    // Cache-busted: both of these are regenerated by build scripts, and a
+    // cached copy shows yesterday's numbers with no sign anything is wrong.
+    s.src = `${src}?t=${Date.now()}`;
+    s.onload = ok;
+    s.onerror = () => bad(new Error(`${src} not found`));
+    document.head.appendChild(s);
+  });
+}
+</script>
+<script>
+// Filled once scores.js loads, inside init(). scores.js has carried two shapes
+// -- a flat id -> row map, and a wrapper with metadata plus a `cases` map -- so
+// both are read and the page survives whichever is on disk.
+let SCORED = {};
+// 10 on the display equals this correlation: two Azure renderings of the same
+// words in different styles (metric-probe.mjs --ceiling). 1.0 is unreachable
+// across two sources and would make every real score look like a failure.
+let CEILING = 0.936;
+
+const rowsEl = document.getElementById("rows");
+const cases = [];
+
+const CORPORA = {
+  inputs2: "3D-ETF reference (screened HDTF speakers) vs latest generation",
+  inputs: "BEAT \u2014 superseded, idle layer still on in these captures",
+};
+document.getElementById("title").textContent = `Lip-sync eval \u2014 ${CORPORA[CORPUS]}`;
+document.getElementById("corpus-switch").innerHTML = Object.keys(CORPORA)
+  .map((k) => (k === CORPUS ? `<b>${k}</b>` : `<a href="?corpus=${k}">${k}</a>`))
+  .join(" &middot; ");
+
+// Probes with a video element rather than a HEAD request: media elements can
+// read sibling file:// URLs, fetch cannot.
+function exists(url) {
+  return new Promise((ok) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.onloadedmetadata = () => ok(true);
+    v.onerror = () => ok(false);
+    v.src = url;
+  });
+}
+
+function videoCell(url, ok, label) {
+  if (!ok) return `<div class="missing">${label}</div>`;
+  return `<video controls preload="metadata" src="${url}"></video>`;
+}
+
+async function init() {
+  try {
+    await loadScript(`${CORPUS}/cases.js`);
+  } catch (err) {
+    rowsEl.innerHTML = `<tr><td colspan="4" class="status">${err.message} &mdash; build it first (see eval/README.md)</td></tr>`;
+    return;
+  }
+  // Scores are optional: the page is still useful for watching the videos
+  // before anyone has run the metric over this corpus.
+  await loadScript("scores.js").catch(() => {});
+  SCORED = globalThis.SCORES?.cases ?? globalThis.SCORES ?? {};
+  CEILING = globalThis.SCORES?.ceiling ?? CEILING;
+  for (const c of globalThis.CASES) {
+    const refUrl = `reference/${c.id}.mp4`;
+    const genUrl = `generation/${c.id}.mp4`;
+    const [refOk, genOk] = await Promise.all([exists(refUrl), exists(genUrl)]);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <div class="case-id">${c.id}</div>
+        <div class="case-text">&ldquo;${c.text}&rdquo;</div>
+        <div class="case-meta">${c.clip} &middot; ${c.seconds}s</div>
+      </td>
+      <td>${videoCell(refUrl, refOk, "reference missing")}</td>
+      <td>${videoCell(genUrl, genOk, `awaiting ${genUrl}`)}</td>
+      <td class="score">${scoreCell(SCORED[c.id])}</td>`;
+    cases.push({ ...c, refUrl, genUrl, refOk, genOk, tr });
+    rowsEl.appendChild(tr);
+  }
+}
+
+const tint = (v, good, ok) => (v >= good ? "#188a4a" : v >= ok ? "#c07c10" : "#c0392b");
+
+function scoreCell(s) {
+  if (!s) return `<div class="status">no score &mdash; run <code>node eval/metric-probe.mjs</code></div>`;
+  const off = Math.abs(s.expressiveness - 1) * 100;
+  const lag = `${s.lagMs > 0 ? "+" : ""}${s.lagMs}ms`;
+  return `
+    <div class="score-value" style="color:${tint(s.score10, 5, 3)}">${s.score10}<span class="score-label">timing /10</span></div>
+    <div class="score-value" style="color:${tint(-Math.abs(s.lagMs), -60, -120)}">${lag}<span class="score-label">lag (+ = late)</span></div>
+    <div class="score-value" style="color:${tint(-off, -25, -50)}">${Math.round(s.expressiveness * 100)}%<span class="score-label">expressiveness</span></div>
+    <div class="score-detail">r ${s.timing.toFixed(3)} of ${CEILING} &middot; ${s.anchors} word anchors</div>`;
+}
+
+init();
+</script>
+</body>
+</html>
