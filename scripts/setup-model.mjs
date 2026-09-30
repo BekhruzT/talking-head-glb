@@ -39,7 +39,7 @@ async function main() {
   const staged = join(dirname(destination), `.ava.glb-${process.pid}.tmp`);
   try {
     run("gh", ["repo", "clone", modelRepository, cloneDir, "--", "--depth", "1"], root,
-      `Could not clone ${modelRepository}. Sign in to GitHub CLI with an approved account and retry.`);
+      `Could not clone ${modelRepository}. Sign in with an approved account (owner: gh auth switch --user BekhruzT) and retry.`);
     run("git", ["-C", cloneDir, "lfs", "pull"], root, "Git LFS is required to download the Ava model.");
 
     const source = join(cloneDir, relativeModelPath);

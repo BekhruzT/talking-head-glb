@@ -17,7 +17,7 @@ These are recordings of the generated avatar output. The human reference recordi
 
 The code and video demos are public; Ava's GLB is distributed separately from the [private model repository](https://github.com/BekhruzT/talking-head-glb-model). If you need model access, [open an issue](https://github.com/BekhruzT/talking-head-glb/issues/new) with your GitHub username and intended use. The owner can approve access to that repository.
 
-You need Node.js, npm, Git, Git LFS, GitHub CLI, an Azure Speech key and region, and an OpenAI API key. Sign in to GitHub CLI with the account that owns the model or has been invited to its private repository. From the repository root, run:
+You need Node.js, npm, Git, Git LFS, GitHub CLI, an Azure Speech key and region, and an OpenAI API key. Sign in to GitHub CLI with the account that owns the model or has been invited to its private repository. If you are the owner and another account is active, run `gh auth switch --user BekhruzT` first. From the repository root, run:
 
 ```sh
 npm run setup:model
