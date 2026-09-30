@@ -3,6 +3,7 @@ node_modules/
 *.glb
 frontend/public/models/ava/
 .env
+frontend/.env.local
 .DS_Store
 
 # Derived eval media, ~190MB, rebuilt by the commands in eval/README.md. The

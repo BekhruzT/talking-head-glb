@@ -6,6 +6,7 @@ import { AudioState } from "./components/icon-tray/audio";
 import { ChatStatus } from './components/avatar/animations';
 
 const BACKEND_ENDPOINT = process.env.REACT_APP_BACKEND_ENDPOINT!;
+const MODEL_PATH = "/models/ava/ava.glb";
 
 // Eval switches, read once from the URL so a recording session can strip the
 // avatar down to lip-sync without a rebuild or injected script:
@@ -22,6 +23,7 @@ export interface Media {
 }
 
 function App() {
+  const [modelAvailability, setModelAvailability] = useState<"checking" | "available" | "unavailable">("checking");
   const [audioUrl, setAudioUrl] = useState<string>();
   const [currentChatStatus, setCurrentChatStatus] = useState<ChatStatus>(ChatStatus.IDLE);
   const [visemes, setVisemes] = useState<VisemeData[]>();
@@ -33,6 +35,19 @@ function App() {
 
   // Owned here so the avatar's lip-sync and the voice share one playback clock.
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(MODEL_PATH, { method: "HEAD", signal: controller.signal })
+      .then((response) => {
+        const isHtmlFallback = response.headers.get("content-type")?.toLowerCase().includes("text/html");
+        setModelAvailability(response.ok && !isHtmlFallback ? "available" : "unavailable");
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setModelAvailability("unavailable");
+      });
+    return () => controller.abort();
+  }, []);
 
   const cleanUpAudio = useCallback((base64Audio: string) => {
     let audio = base64Audio;
@@ -126,9 +141,16 @@ function App() {
             margin: "auto",
           }}
         >
-          <Avatar modelPath="/models/ava/ava.glb" visemes={visemes} currentChatStatus={currentChatStatus} audioElRef={audioElRef} blendShapeFrames={blendShapeFrames} expressionsEnabled={!evalFlags.has("noExpressions")} headMovementEnabled={!evalFlags.has("noHeadMovement")} />
+          {modelAvailability === "available" && <Avatar modelPath={MODEL_PATH} visemes={visemes} currentChatStatus={currentChatStatus} audioElRef={audioElRef} blendShapeFrames={blendShapeFrames} expressionsEnabled={!evalFlags.has("noExpressions")} headMovementEnabled={!evalFlags.has("noHeadMovement")} />}
+          {modelAvailability === "unavailable" && (
+            <div role="alert" style={{ background: "rgba(255,255,255,0.94)", borderRadius: "12px", margin: "auto", maxWidth: "32rem", padding: "2rem" }}>
+              <h1>Ava's model is unavailable</h1>
+              <p>Run <code>npm run setup:model</code> from the repository root after your GitHub account has access to the private model.</p>
+              <a href="https://github.com/BekhruzT/talking-head-glb/issues/new">Request access</a>
+            </div>
+          )}
         </div>
-      <div
+      {modelAvailability === "available" && <div
         style={{
           display: "flex",
           flexDirection: "column",
@@ -149,7 +171,7 @@ function App() {
           setAudioState={setAudioState}
           audioElRef={audioElRef}
         />
-      </div>
+      </div>}
     </>
   );
 }

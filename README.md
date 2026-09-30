@@ -17,13 +17,14 @@ These are recordings of the generated avatar output. The human reference recordi
 
 The code and video demos are public; Ava's GLB is distributed separately from the [private model repository](https://github.com/BekhruzT/talking-head-glb-model). If you need model access, [open an issue](https://github.com/BekhruzT/talking-head-glb/issues/new) with your GitHub username and intended use. The owner can approve access to that repository.
 
-You need Node.js, npm, Git, Git LFS, GitHub CLI, an Azure Speech key and region, and an OpenAI API key. Sign in to GitHub CLI with the account that owns the model or has been invited to its private repository. If you are the owner and another account is active, run `gh auth switch --user BekhruzT` first. From the repository root, run:
+You need Node.js 22.18 or newer (Node 24 tested), npm, Git, Git LFS, GitHub CLI, an Azure Speech key and region, and an OpenAI API key. Sign in with `gh auth login` using the GitHub account that owns the model or has been invited to its private repository. If you are the owner and another account is active, run `gh auth switch --user BekhruzT` first. From the repository root, run:
 
 ```sh
+git lfs install
 npm run setup:model
 ```
 
-The command verifies the model and installs it at `frontend/public/models/ava/ava.glb`. The path is ignored by Git. A public clone cannot run the avatar until this step succeeds.
+The command verifies the model and installs it at `frontend/public/models/ava/ava.glb`. The path is ignored by Git. If your account lacks access, setup exits with an explanation and leaves the model uninstalled; request access through the issue link above. A public clone can start the web app without the model, but the app will show setup instructions instead of Ava until this step succeeds.
 
 1. Copy `.env.template` to `.env` in the repository root. Set `SPEECH_KEY`, `SPEECH_REGION`, and `OPENAI_API_KEY`.
 2. Create `frontend/.env.local` with `REACT_APP_BACKEND_ENDPOINT=http://localhost:4000`.

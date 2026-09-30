@@ -6,10 +6,34 @@ jest.mock("./components", () => ({
   IconTray: () => <div data-testid="controls" />,
 }));
 
-test("loads Ava as the only avatar without a selection step", () => {
+beforeEach(() => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    headers: { get: () => "model/gltf-binary" },
+  });
+});
+
+test("loads Ava as the only avatar after the model is found", async () => {
   render(<App />);
 
-  expect(screen.getByTestId("avatar")).toHaveAttribute("data-model", "/models/ava/ava.glb");
+  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", "/models/ava/ava.glb");
   expect(screen.getByTestId("controls")).toBeInTheDocument();
   expect(screen.queryByText(/select avatar/i)).not.toBeInTheDocument();
+});
+
+test.each([
+  { ok: false, contentType: "text/html" },
+  { ok: true, contentType: "text/html" },
+])("shows model setup guidance when the asset is unavailable: %p", async ({ ok, contentType }) => {
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok,
+    headers: { get: () => contentType },
+  });
+
+  render(<App />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/npm run setup:model/i);
+  expect(screen.getByRole("link", { name: /request access/i })).toBeInTheDocument();
+  expect(screen.queryByTestId("avatar")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("controls")).not.toBeInTheDocument();
 });
