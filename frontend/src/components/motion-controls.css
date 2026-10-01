@@ -1,0 +1,89 @@
+.motion-controls {
+  position: fixed;
+  z-index: 20;
+  top: 22px;
+  right: 24px;
+  width: min(272px, calc(100vw - 32px));
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+
+.motion-controls__button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+  padding: 10px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(29, 25, 49, 0.86);
+  box-shadow: 0 6px 20px rgba(20, 17, 37, 0.18);
+  color: inherit;
+  cursor: pointer;
+  font: 600 14px system-ui, sans-serif;
+  backdrop-filter: blur(14px);
+}
+
+.motion-controls__button:hover,
+.motion-controls__button:focus-visible {
+  background: #4b3d79;
+}
+
+.motion-controls__button:focus-visible,
+.motion-controls__option input:focus-visible {
+  outline: 2px solid #c6afff;
+  outline-offset: 3px;
+}
+
+.motion-controls__icon {
+  color: #d4bdff;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.motion-controls__panel {
+  margin-top: 10px;
+  padding: 17px 16px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 18px;
+  background: rgba(29, 25, 49, 0.91);
+  box-shadow: 0 16px 36px rgba(20, 17, 37, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.motion-controls__panel h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.motion-controls__panel p {
+  margin: 4px 0 12px;
+  color: #ded7ed;
+  font-size: 12px;
+}
+
+.motion-controls__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.motion-controls__option input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #ad8bff;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .motion-controls {
+    top: 12px;
+    right: 12px;
+  }
+}

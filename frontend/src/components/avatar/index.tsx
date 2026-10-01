@@ -15,9 +15,11 @@ export interface AvatarProps {
   blendShapeFrames?: number[][];
   expressionsEnabled?: boolean;
   headMovementEnabled?: boolean;
+  gazeEnabled?: boolean;
+  blinkingEnabled?: boolean;
 }
 
-export const Avatar = ({ modelPath, visemes, currentChatStatus, audioElRef, blendShapeFrames, expressionsEnabled, headMovementEnabled }: AvatarProps) => {
+export const Avatar = ({ modelPath, visemes, currentChatStatus, audioElRef, blendShapeFrames, expressionsEnabled, headMovementEnabled, gazeEnabled, blinkingEnabled }: AvatarProps) => {
   return (
     <GlbAvatar
       src={modelPath}
@@ -25,6 +27,8 @@ export const Avatar = ({ modelPath, visemes, currentChatStatus, audioElRef, blen
       blendShapeFrames={blendShapeFrames}
       expressionsEnabled={expressionsEnabled}
       headMovementEnabled={headMovementEnabled}
+      gazeEnabled={gazeEnabled}
+      blinkingEnabled={blinkingEnabled}
       expressions={expressions}
       headMovements={headMovements}
       blendShapeIndices={blendShapeIndices}

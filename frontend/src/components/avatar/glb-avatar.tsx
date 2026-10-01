@@ -12,6 +12,7 @@ import { Environment, useGLTF, Html } from "@react-three/drei";
 import { ChatStatus } from "./animations";
 import { lipsyncTime } from "./lipsync-clock";
 import { AZURE_BLENDSHAPE_NAMES, SPEECH_CHANNEL_NAMES, normalizeFrames, sampleFrame } from "./blendshape-stream";
+import { ambientMotionEnabled, motionChannel, MotionSettings } from "./motion-settings";
 import "./avatar.css";
 
 
@@ -68,6 +69,8 @@ export interface GlbAvatarProps {
   // Turning them off leaves the mouth as the only thing moving.
   expressionsEnabled?: boolean;
   headMovementEnabled?: boolean;
+  gazeEnabled?: boolean;
+  blinkingEnabled?: boolean;
 }
 
 function getBlendShapesAzure(visemes: any) {
@@ -120,7 +123,9 @@ const Model = ({
   audioElRef,
   blendShapeFrames,
   expressionsEnabled = true,
-  headMovementEnabled = true
+  headMovementEnabled = true,
+  gazeEnabled = true,
+  blinkingEnabled = true
 }: GlbAvatarProps) => {
   const fpsRef = useRef<number>(0);
 
@@ -128,6 +133,9 @@ const Model = ({
   const currentExpressionRef = useRef("null");
   const currentHeadMovementRef = useRef("null");
   const lastHeadMovementTimeRef = useRef<{[key: string]: number}>({"lastRandomRun": 0, "lastLookOutRun": 0})
+  const motionRef = useRef<MotionSettings>({ headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled });
+  motionRef.current = { headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled };
+  const previousMotionRef = useRef(motionRef.current);
 
   const [animationEnds, setAnimationEnds] = useState(0);
 
@@ -199,6 +207,35 @@ const Model = ({
       return animations;
     });
   }, [setAnimations, blendShapeIndices]);
+
+  useEffect(() => {
+    const disabled = (Object.keys(motionRef.current) as (keyof MotionSettings)[])
+      .filter((key) => previousMotionRef.current[key] && !motionRef.current[key]);
+    if (disabled.length) {
+      const indices = new Set(Object.entries(blendShapeIndices)
+        .filter(([shape]) => disabled.includes(motionChannel(shape)))
+        .map(([, index]) => index));
+      const speechIndices = new Set(streamingRef.current
+        ? speechChannels.map(([, morphIndex]) => morphIndex)
+        : []);
+      Object.entries(animations).forEach(([key, animation]) => {
+        if (animation.media) speechIndices.add(Number(key.split("#")[0]));
+      });
+      setAnimations((current) => {
+        const next = { ...current };
+        Object.keys(next).forEach((key) => {
+          if (!next[key].media && indices.has(Number(key.split("#")[0]))) delete next[key];
+        });
+        return next;
+      });
+      morphMeshes.forEach((mesh) => indices.forEach((index) => {
+        if (!speechIndices.has(index)) mesh.morphTargetInfluences[index] = 0;
+      }));
+      if (disabled.includes("expressionsEnabled")) currentExpressionRef.current = "";
+      if (!headMovementEnabled && !gazeEnabled) currentHeadMovementRef.current = "";
+    }
+    previousMotionRef.current = motionRef.current;
+  }, [headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled, blendShapeIndices, morphMeshes, speechChannels, animations]);
 
   const animateLipSync = useCallback((mapped_blendshapes: any) => {
     /**
@@ -295,6 +332,7 @@ const Model = ({
       const nextMovement = nextHeadMovementName ? headMovements[nextHeadMovementName] : [];
 
       for (const shape in movement) {
+        if (!ambientMotionEnabled(shape, motionRef.current)) continue;
         if (nextMovement.hasOwnProperty(shape)) {
           continue;
         }
@@ -304,7 +342,7 @@ const Model = ({
   }, [setLipsAnimation, headMovements]);
 
   const runHeadMovement = useCallback((movementName: string, duration: number, reverse: boolean = false, pause: number = 0, initial_pause: number = 50) => {
-    if (!headMovementEnabled) return;
+    if (!motionRef.current.headMovementEnabled && !motionRef.current.gazeEnabled) return;
 
     const startTime = Date.now() + initial_pause;
     const movement = headMovements[movementName];
@@ -314,6 +352,7 @@ const Model = ({
     currentHeadMovementRef.current = movementName
 
     for (const shape in movement) {
+      if (!ambientMotionEnabled(shape, motionRef.current)) continue;
       setLipsAnimation(shape, startTime + (shape.includes("eye") ? 0 : eye_pause), duration, 
                       morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]], movement[shape], "lerp");
       if (reverse) {
@@ -322,7 +361,7 @@ const Model = ({
         ); 
       }
     }
-  }, [killHeadMovement, setLipsAnimation, headMovements, blendShapeIndices, morphMeshes, headMovementEnabled])
+  }, [killHeadMovement, setLipsAnimation, headMovements, blendShapeIndices, morphMeshes])
 
   
   useEffect(() => {
@@ -405,6 +444,7 @@ const Model = ({
         : [];
 
       for (const shape in expression) {
+        if (!ambientMotionEnabled(shape, motionRef.current)) continue;
         if (nextExpression.hasOwnProperty(shape)) {
           // do not animate blendshapes included in next expression
           continue;
@@ -433,7 +473,7 @@ const Model = ({
      * @param {number} [initial_pause=50] - The initial pause before the animation starts in milliseconds.
      */
 
-    if (!expressionsEnabled) return;
+    if (expresionName === "blink" ? !motionRef.current.blinkingEnabled : !motionRef.current.expressionsEnabled) return;
 
     const startTime = Date.now() + initial_pause;
     const expression = expressions[expresionName];
@@ -443,6 +483,7 @@ const Model = ({
       currentExpressionRef.current = expresionName;
     }
     for (const shape in expression) {
+      if (!ambientMotionEnabled(shape, motionRef.current)) continue;
       setLipsAnimation(
         shape, startTime, duration, morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]], expression[shape], "lerp"
       );
@@ -453,12 +494,12 @@ const Model = ({
         ); // auto kills the expression after some time
       }
     }
-  }, [setLipsAnimation, morphMeshes, blendShapeIndices, expressions, killExpression, expressionsEnabled]);
+  }, [setLipsAnimation, morphMeshes, blendShapeIndices, expressions, killExpression]);
 
   const randomHeadRef = useRef<{[key: string]: number}>({"HeadUp": 1, "HeadDown": 1, "TrunLeft": 1, "TrunRight": 1})
 
   const randomHeadMovement = useCallback((duration: number = 500) => {
-    if (!headMovementEnabled) return;
+    if (!motionRef.current.headMovementEnabled) return;
     const gap = Date.now() - lastHeadMovementTimeRef.current["lastLookOutRun"]
     const minGap = currentChatStatus === ChatStatus.IDLE ? 750 : 2300
     if (gap > minGap){
@@ -483,7 +524,7 @@ const Model = ({
         shape, startTime, duration, startValue, Math.max(0, Math.min(startValue + delta, shape.includes("Trun") ? 0.055 : 0.17)), "lerp"
       );
     }
-  }, [blendShapeIndices, morphMeshes, setLipsAnimation, currentChatStatus, headMovementEnabled])
+  }, [blendShapeIndices, morphMeshes, setLipsAnimation, currentChatStatus])
 
   const randomFacialMovements = useCallback((duration: number = 350, pause: number = 25) => {
     /**
@@ -497,7 +538,7 @@ const Model = ({
      * @returns {void}
      **/
 
-    if (!expressionsEnabled) return;
+    if (!motionRef.current.expressionsEnabled) return;
     // Cheek/brow bursts at 0.55 read as smiling mid-sentence, so leave the
     // face to the speech stream while it is driving.
     if (streamingRef.current) return;
@@ -526,7 +567,7 @@ const Model = ({
         "lerp"
       );
     }
-  }, [setLipsAnimation, morphMeshes, blendShapeIndices, expressionsEnabled]);
+  }, [setLipsAnimation, morphMeshes, blendShapeIndices]);
 
   useEffect(() => {
     let intervals: any = []
@@ -566,6 +607,7 @@ const Model = ({
     prevExpression: any
   ) => {
     for (const shape in expression) {
+      if (!ambientMotionEnabled(shape, motionRef.current)) continue;
       const startValue = shape in prevExpression ? prevExpression[shape] : 0;
       setLipsAnimation(
         shape,
@@ -601,7 +643,7 @@ const Model = ({
      * @param {number} pause - The pause between each eye movement in milliseconds.
      * @param {boolean} [blinkBetween=false] - Whether to add a blink between each eye movement.
      */
-    if (!expressionsEnabled) return;
+    if (!motionRef.current.gazeEnabled) return;
 
     const startTime = Date.now() + 100;
 
@@ -626,7 +668,7 @@ const Model = ({
         movementSequence[i - 1] ? expressions[movementSequence[i - 1]] : {}
       );
     }
-  }, [runExpression, moveEyes, expressions, expressionsEnabled]);
+  }, [runExpression, moveEyes, expressions]);
 
   const abortCurrentLipsync = useCallback(() => {
     /**

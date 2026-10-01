@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, IconTray, VisemeData } from "./components";
 import { MicState } from "./components/icon-tray/mic";
 import { AudioState } from "./components/icon-tray/audio";
+import { MotionControls } from "./components/motion-controls";
+import { MotionSettings } from "./components/avatar/motion-settings";
 
 import { ChatStatus } from './components/avatar/animations';
 
@@ -10,7 +12,7 @@ const MODEL_PATH = "/models/ava/ava.glb";
 
 // Eval switches, read once from the URL so a recording session can strip the
 // avatar down to lip-sync without a rebuild or injected script:
-//   ?noExpressions=1    no emotions, blinks, gaze darts or brow/cheek bursts
+//   ?noExpressions=1    no emotions, blinks, or gaze
 //   ?noHeadMovement=1   no neck turn or head bob
 const evalFlags = new URLSearchParams(window.location.search);
 
@@ -24,6 +26,12 @@ export interface Media {
 
 function App() {
   const [modelAvailability, setModelAvailability] = useState<"checking" | "available" | "unavailable">("checking");
+  const [motionSettings, setMotionSettings] = useState<MotionSettings>({
+    headMovementEnabled: !evalFlags.has("noHeadMovement"),
+    gazeEnabled: !evalFlags.has("noExpressions"),
+    expressionsEnabled: !evalFlags.has("noExpressions"),
+    blinkingEnabled: !evalFlags.has("noExpressions"),
+  });
   const [audioUrl, setAudioUrl] = useState<string>();
   const [currentChatStatus, setCurrentChatStatus] = useState<ChatStatus>(ChatStatus.IDLE);
   const [visemes, setVisemes] = useState<VisemeData[]>();
@@ -141,7 +149,16 @@ function App() {
             margin: "auto",
           }}
         >
-          {modelAvailability === "available" && <Avatar modelPath={MODEL_PATH} visemes={visemes} currentChatStatus={currentChatStatus} audioElRef={audioElRef} blendShapeFrames={blendShapeFrames} expressionsEnabled={!evalFlags.has("noExpressions")} headMovementEnabled={!evalFlags.has("noHeadMovement")} />}
+          {modelAvailability === "available" && (
+            <Avatar
+              modelPath={MODEL_PATH}
+              visemes={visemes}
+              currentChatStatus={currentChatStatus}
+              audioElRef={audioElRef}
+              blendShapeFrames={blendShapeFrames}
+              {...motionSettings}
+            />
+          )}
           {modelAvailability === "unavailable" && (
             <div role="alert" style={{ background: "rgba(255,255,255,0.94)", borderRadius: "12px", margin: "auto", maxWidth: "32rem", padding: "2rem" }}>
               <h1>Ava's model is unavailable</h1>
@@ -150,6 +167,12 @@ function App() {
             </div>
           )}
         </div>
+      {modelAvailability === "available" && (
+        <MotionControls
+          settings={motionSettings}
+          onChange={(key, enabled) => setMotionSettings((current) => ({ ...current, [key]: enabled }))}
+        />
+      )}
       {modelAvailability === "available" && <div
         style={{
           display: "flex",

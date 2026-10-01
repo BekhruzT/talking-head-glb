@@ -1,8 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
 jest.mock("./components", () => ({
-  Avatar: ({ modelPath }: { modelPath: string }) => <div data-testid="avatar" data-model={modelPath} />,
+  Avatar: ({ modelPath, headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled }: {
+    modelPath: string;
+    headMovementEnabled: boolean;
+    gazeEnabled: boolean;
+    expressionsEnabled: boolean;
+    blinkingEnabled: boolean;
+  }) => <div data-testid="avatar" data-model={modelPath} data-head={headMovementEnabled} data-gaze={gazeEnabled} data-expressions={expressionsEnabled} data-blinking={blinkingEnabled} />,
   IconTray: () => <div data-testid="controls" />,
 }));
 
@@ -19,6 +25,26 @@ test("loads Ava as the only avatar after the model is found", async () => {
   expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", "/models/ava/ava.glb");
   expect(screen.getByTestId("controls")).toBeInTheDocument();
   expect(screen.queryByText(/select avatar/i)).not.toBeInTheDocument();
+});
+
+test("motion checkboxes switch head, gaze, expressions, and blinking independently", async () => {
+  render(<App />);
+  const avatar = await screen.findByTestId("avatar");
+
+  fireEvent.click(screen.getByRole("button", { name: /motion/i }));
+  const labels = ["Head & neck", "Eye gaze", "Facial expressions", "Blinking"];
+  const attributes = ["data-head", "data-gaze", "data-expressions", "data-blinking"];
+
+  labels.forEach((label, index) => {
+    const checkbox = screen.getByRole("checkbox", { name: label });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(avatar).toHaveAttribute(attributes[index], "false");
+    attributes.filter((_, other) => other !== index).forEach((attribute) => {
+      expect(avatar).toHaveAttribute(attribute, "true");
+    });
+    fireEvent.click(checkbox);
+  });
 });
 
 test.each([
