@@ -5,9 +5,11 @@ import {
 } from "microsoft-cognitiveservices-speech-sdk";
 
 import { Configuration, OpenAIApi } from "openai";
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const gemini = process.env.GEMINI_API_KEY;
+const configuration = new Configuration(gemini
+  ? { apiKey: gemini, basePath: "https://generativelanguage.googleapis.com/v1beta/openai" }
+  : { apiKey: process.env.OPENAI_API_KEY });
+const model = gemini ? "gemini-3.5-flash-lite" : process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 
 const prompt = `
 I am a laid-back conversationalist, open to chat about anything the user would like.
@@ -31,10 +33,11 @@ export const handler = (event: any, context: any) => {
         const openai = new OpenAIApi(configuration);
 
         const response = await openai.createChatCompletion({
-          model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+          model,
           messages: [{ "role": "system", "content": prompt }, ...messages],
-        });
-        const content = response.data.choices[0].message.content
+        }).catch((error) => reject({ statusCode: 502, headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ error: error.response?.data?.error?.message ?? error.message }) }));
+        if (!response) return;
+        const content = response.data.choices[0].message.content.replace(/^\s*```(json)?|```\s*$/g, "")
         let parsedResponse; 
         try {
           parsedResponse = JSON.parse(content);
@@ -43,7 +46,7 @@ export const handler = (event: any, context: any) => {
           parsedResponse = {'text': content, 'emotion': 'neutral'};
         }
         text = parsedResponse.text;
-        emotion = parsedResponse.emotion.trim().toLowerCase();
+        emotion = (parsedResponse.emotion ?? "neutral").trim().toLowerCase();
       } else {
         text = requestBody.text;
         emotion = requestBody.emotion ?? 'neutral';
