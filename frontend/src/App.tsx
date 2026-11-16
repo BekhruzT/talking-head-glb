@@ -8,13 +8,33 @@ import { MotionSettings } from "./components/avatar/motion-settings";
 import { ChatStatus } from './components/avatar/animations';
 
 const BACKEND_ENDPOINT = process.env.REACT_APP_BACKEND_ENDPOINT!;
-const MODEL_PATH = "/models/ava/ava.glb";
-
 // Eval switches, read once from the URL so a recording session can strip the
 // avatar down to lip-sync without a rebuild or injected script:
 //   ?noExpressions=1    no emotions, blinks, or gaze
 //   ?noHeadMovement=1   no neck turn or head bob
+//   ?model=<name>       start on any GLB under public/models/rocketbox/ instead of Ava
 const evalFlags = new URLSearchParams(window.location.search);
+
+interface Head {
+  id: string;
+  label: string;
+  path: string;
+  position?: [number, number, number];
+}
+const rocketbox = (id: string): Head => ({
+  id,
+  label: id[0].toUpperCase() + id.slice(1).replace(/-/g, " "),
+  path: `/models/rocketbox/${id}.glb`,
+});
+const REQUESTED = evalFlags.get("model")?.replace(/[^\w-]/g, "");
+const KNOWN = ["medical-female-01", "medical-male-01", "business-female-02", "business-male-03"];
+// The Rocketbox heads are optional downloads, so the picker shows whichever are present.
+const HEADS: Head[] = [
+  { id: "ava", label: "Ava", path: "/models/ava/ava.glb", position: [0, -1.72, 0] },
+  { id: "ict-facekit", label: "ICT FaceKit", path: "/models/ict/ict-facekit.glb" },
+  { id: "mpfb", label: "MakeHuman", path: "/models/mpfb/mpfb.glb" },
+  ...[...KNOWN, ...(REQUESTED && !KNOWN.includes(REQUESTED) && REQUESTED !== "ict-facekit" ? [REQUESTED] : [])].map(rocketbox),
+];
 
 export interface Media {
   audio: string;
@@ -25,7 +45,10 @@ export interface Media {
 }
 
 function App() {
-  const [modelAvailability, setModelAvailability] = useState<"checking" | "available" | "unavailable">("checking");
+  const [availableHeads, setAvailableHeads] = useState<Head[]>();
+  const headId = REQUESTED ?? "ava";
+  const head = availableHeads?.find((h) => h.id === headId) ?? availableHeads?.[0];
+  const modelAvailability = !availableHeads ? "checking" : head ? "available" : "unavailable";
   const [motionSettings, setMotionSettings] = useState<MotionSettings>({
     headMovementEnabled: !evalFlags.has("noHeadMovement"),
     gazeEnabled: !evalFlags.has("noExpressions"),
@@ -46,14 +69,14 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(MODEL_PATH, { method: "HEAD", signal: controller.signal })
-      .then((response) => {
-        const isHtmlFallback = response.headers.get("content-type")?.toLowerCase().includes("text/html");
-        setModelAvailability(response.ok && !isHtmlFallback ? "available" : "unavailable");
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") setModelAvailability("unavailable");
-      });
+    // The dev server answers a missing file with index.html, so a 200 alone proves nothing.
+    const exists = (head: Head) =>
+      fetch(head.path, { method: "HEAD", signal: controller.signal })
+        .then((response) => response.ok && !response.headers.get("content-type")?.toLowerCase().includes("text/html"))
+        .catch(() => false);
+    Promise.all(HEADS.map(exists)).then((found) => {
+      if (!controller.signal.aborted) setAvailableHeads(HEADS.filter((_, i) => found[i]));
+    });
     return () => controller.abort();
   }, []);
 
@@ -149,9 +172,11 @@ function App() {
             margin: "auto",
           }}
         >
-          {modelAvailability === "available" && (
+          {head && (
             <Avatar
-              modelPath={MODEL_PATH}
+              key={head.id}
+              modelPath={head.path}
+              position={head.position}
               visemes={visemes}
               currentChatStatus={currentChatStatus}
               audioElRef={audioElRef}

@@ -19,12 +19,22 @@ beforeEach(() => {
   });
 });
 
-test("loads Ava as the only avatar after the model is found", async () => {
+test("loads Ava by default when her model is found", async () => {
   render(<App />);
 
   expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", "/models/ava/ava.glb");
   expect(screen.getByTestId("controls")).toBeInTheDocument();
-  expect(screen.queryByText(/select avatar/i)).not.toBeInTheDocument();
+});
+
+test("falls back to the first head whose file exists when Ava is missing", async () => {
+  const present = ["/models/rocketbox/medical-female-01.glb", "/models/rocketbox/business-male-03.glb"];
+  (global.fetch as jest.Mock).mockImplementation(async (url: string) => ({
+    ok: present.includes(url),
+    headers: { get: () => (present.includes(url) ? "model/gltf-binary" : "text/html") },
+  }));
+  render(<App />);
+
+  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", present[0]);
 });
 
 test("motion checkboxes switch head, gaze, expressions, and blinking independently", async () => {

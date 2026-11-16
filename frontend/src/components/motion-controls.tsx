@@ -34,7 +34,7 @@ export function MotionControls({ settings, onChange }: MotionControlsProps) {
       {open && (
         <div className="motion-controls__panel" id="motion-options">
           <h2>Avatar motion</h2>
-          <p>Choose how Ava moves.</p>
+          <p>Choose how the avatar moves.</p>
           {options.map(({ key, label }) => (
             <label className="motion-controls__option" key={key}>
               <span>{label}</span>
