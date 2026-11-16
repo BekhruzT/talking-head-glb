@@ -9,7 +9,9 @@ import {
 } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, useGLTF, Html } from "@react-three/drei";
+import { Euler, Quaternion, Vector3 } from "three";
 import { ChatStatus } from "./animations";
+import { resolveRig } from "./rig";
 import { lipsyncTime } from "./lipsync-clock";
 import { AZURE_BLENDSHAPE_NAMES, SPEECH_CHANNEL_NAMES, normalizeFrames, sampleFrame } from "./blendshape-stream";
 import { ambientMotionEnabled, motionChannel, MotionSettings } from "./motion-settings";
@@ -108,11 +110,17 @@ function randomDuration(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1) + min) * 1000;
 }
 
+// Radians per unit of Ava's neck shapes, measured off her HeadDown/TrunLeft
+// morph targets, so the same channel values turn a bone-rigged head as far.
+const PITCH_PER_UNIT = 0.5;
+const YAW_PER_UNIT = 0.87;
+const HEAD_BONE = /(^|[\s_:])head$/i;
+
 const Model = ({
   src,
   expressions,
   headMovements,
-  blendShapeIndices,
+  blendShapeIndices: defaultIndices,
   randomExpressions,
   position,
   rotation,
@@ -148,6 +156,59 @@ const Model = ({
       ),
     [nodes]
   );
+
+  // A boneless head-only model (ICT-FaceKit) names a plain pivot node Head instead.
+  const headBone: any = useMemo(() => {
+    const all: any[] = Object.values(nodes);
+    return all.find((node) => node.isBone && HEAD_BONE.test(node.name))
+      ?? (all.some((node) => node.isBone) ? undefined : all.find((node) => !node.isMesh && HEAD_BONE.test(node.name)));
+  }, [nodes]);
+
+  const rig = useMemo(
+    () => resolveRig(morphMeshes.map((mesh) => mesh.morphTargetDictionary ?? {}), defaultIndices, !!headBone),
+    [morphMeshes, defaultIndices, headBone]
+  );
+  const blendShapeIndices = rig.indices;
+  // Own value of each slot the mesh cannot hold alone: bone-driven slots, and
+  // slots sharing a morph target, which shows the strongest of them.
+  const slotValuesRef = useRef<{ [slot: number]: number }>({});
+  const headTurnRef = useRef({ rest: null as Quaternion | null, parent: new Quaternion(), delta: new Quaternion(), euler: new Euler() });
+
+  const readInfluence = useCallback((slot: number): number => {
+    if (rig.virtual.has(slot) || rig.shared.has(slot)) return slotValuesRef.current[slot] ?? 0;
+    for (let m = 0; m < morphMeshes.length; m++) {
+      const index = rig.slots[m][slot];
+      if (index >= 0) return morphMeshes[m].morphTargetInfluences[index];
+    }
+    return 0;
+  }, [morphMeshes, rig]);
+
+  const writeInfluence = useCallback((slot: number, value: number) => {
+    const own = slotValuesRef.current;
+    const siblings = rig.shared.get(slot);
+    if (rig.virtual.has(slot) || siblings) own[slot] = value;
+    morphMeshes.forEach((mesh, m) => {
+      const index = rig.slots[m][slot];
+      if (index < 0) return;
+      mesh.morphTargetInfluences[index] = siblings
+        ? Math.max(value, ...siblings.filter((s) => rig.slots[m][s] === index).map((s) => own[s] ?? 0))
+        : value;
+    });
+  }, [morphMeshes, rig]);
+
+  // Without an explicit placement, stand the model so its head sits where
+  // Ava's does in front of the default camera.
+  const placement = useMemo(() => {
+    if (position || !headBone) return position;
+    scene.updateMatrixWorld(true);
+    const head = scene.worldToLocal(headBone.getWorldPosition(new Vector3()));
+    return [-head.x, -head.y - 0.09, -head.z];
+  }, [position, headBone, scene]);
+
+  useEffect(() => {
+    const probe = new URLSearchParams(window.location.search).has("probe");
+    if (probe) (window as any).__avatar = { read: (name: string) => readInfluence(blendShapeIndices[name]), indices: blendShapeIndices, headBone, virtual: rig.virtual, rig, meshes: morphMeshes };
+  }, [readInfluence, blendShapeIndices, headBone, rig, morphMeshes]);
 
   // [stream channel, morph target index, blendshape name] for the articulators.
   const speechChannels = useMemo(
@@ -196,6 +257,7 @@ const Model = ({
       const index = blendShapeIndices[mapped_blendshape];
       if (index === undefined) {
         console.warn(`blendshape not on the rig: ${mapped_blendshape}`);
+        return animations;
       }
       animations[index.toString() + "#" + startTime.toString()] = {
         startValue,
@@ -228,14 +290,14 @@ const Model = ({
         });
         return next;
       });
-      morphMeshes.forEach((mesh) => indices.forEach((index) => {
-        if (!speechIndices.has(index)) mesh.morphTargetInfluences[index] = 0;
-      }));
+      indices.forEach((index) => {
+        if (!speechIndices.has(index)) writeInfluence(index, 0);
+      });
       if (disabled.includes("expressionsEnabled")) currentExpressionRef.current = "";
       if (!headMovementEnabled && !gazeEnabled) currentHeadMovementRef.current = "";
     }
     previousMotionRef.current = motionRef.current;
-  }, [headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled, blendShapeIndices, morphMeshes, speechChannels, animations]);
+  }, [headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled, blendShapeIndices, writeInfluence, speechChannels, animations]);
 
   const animateLipSync = useCallback((mapped_blendshapes: any) => {
     /**
@@ -354,14 +416,14 @@ const Model = ({
     for (const shape in movement) {
       if (!ambientMotionEnabled(shape, motionRef.current)) continue;
       setLipsAnimation(shape, startTime + (shape.includes("eye") ? 0 : eye_pause), duration, 
-                      morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]], movement[shape], "lerp");
+                      readInfluence(blendShapeIndices[shape]), movement[shape], "lerp");
       if (reverse) {
         setLipsAnimation(
           shape, startTime + duration + pause, duration, movement[shape], 0, "lerp"
         ); 
       }
     }
-  }, [killHeadMovement, setLipsAnimation, headMovements, blendShapeIndices, morphMeshes])
+  }, [killHeadMovement, setLipsAnimation, headMovements, blendShapeIndices, readInfluence])
 
   
   useEffect(() => {
@@ -417,12 +479,12 @@ const Model = ({
       });
 
       for (const shape in blendShapeIndices) {
-        setLipsAnimation(shape, startTime, 5, morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]], 0, "lerp");
+        setLipsAnimation(shape, startTime, 5, readInfluence(blendShapeIndices[shape]), 0, "lerp");
       }
 
       currentExpressionRef.current = "";
     },
-    [animations, blendShapeIndices, morphMeshes, setLipsAnimation]
+    [animations, blendShapeIndices, readInfluence, setLipsAnimation]
   );
 
   const killExpression = useCallback((
@@ -485,7 +547,7 @@ const Model = ({
     for (const shape in expression) {
       if (!ambientMotionEnabled(shape, motionRef.current)) continue;
       setLipsAnimation(
-        shape, startTime, duration, morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]], expression[shape], "lerp"
+        shape, startTime, duration, readInfluence(blendShapeIndices[shape]), expression[shape], "lerp"
       );
       if (reverse) {
         //might need a fix -> better run kill expression with initial timeout
@@ -494,7 +556,7 @@ const Model = ({
         ); // auto kills the expression after some time
       }
     }
-  }, [setLipsAnimation, morphMeshes, blendShapeIndices, expressions, killExpression]);
+  }, [setLipsAnimation, readInfluence, blendShapeIndices, expressions, killExpression]);
 
   const randomHeadRef = useRef<{[key: string]: number}>({"HeadUp": 1, "HeadDown": 1, "TrunLeft": 1, "TrunRight": 1})
 
@@ -519,12 +581,12 @@ const Model = ({
 
     function randomMovement (shape: string, duration: number, delta: number) {
       const startTime = Date.now()
-      const startValue = morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]]
+      const startValue = readInfluence(blendShapeIndices[shape])
       setLipsAnimation(
         shape, startTime, duration, startValue, Math.max(0, Math.min(startValue + delta, shape.includes("Trun") ? 0.055 : 0.17)), "lerp"
       );
     }
-  }, [blendShapeIndices, morphMeshes, setLipsAnimation, currentChatStatus])
+  }, [blendShapeIndices, readInfluence, setLipsAnimation, currentChatStatus])
 
   const randomFacialMovements = useCallback((duration: number = 350, pause: number = 25) => {
     /**
@@ -556,7 +618,7 @@ const Model = ({
     for (let i = 0; i < randomMovement.length; i++) {
       const shape = randomMovement[i];
       const startValue =
-        morphMeshes[0].morphTargetInfluences[blendShapeIndices[shape]];
+        readInfluence(blendShapeIndices[shape]);
       setLipsAnimation(shape, startTime, duration, startValue, 0.55, "lerp");
       setLipsAnimation(
         shape,
@@ -567,7 +629,7 @@ const Model = ({
         "lerp"
       );
     }
-  }, [setLipsAnimation, morphMeshes, blendShapeIndices]);
+  }, [setLipsAnimation, readInfluence, blendShapeIndices]);
 
   useEffect(() => {
     let intervals: any = []
@@ -685,14 +747,14 @@ const Model = ({
             Object.keys(blendShapeIndices)[index],
             Date.now(),
             150,
-            morphMeshes[0].morphTargetInfluences[index],
+            readInfluence(index),
             0,
             "lerp"
           );
         }
       }
     }
-  }, [animations, setLipsAnimation, blendShapeIndices, morphMeshes]);
+  }, [animations, setLipsAnimation, blendShapeIndices, readInfluence]);
 
   useEffect(() => {
     abortCurrentLipsync();
@@ -841,11 +903,7 @@ const Model = ({
           interpolation as keyof typeof interpolationFunctions
         ](startValue, endValue, progress);
 
-        morphMeshes.forEach(
-          // update blendshape at every mesh level
-          (morphMesh: any) =>
-            (morphMesh.morphTargetInfluences[index] = newValue)
-        );
+        writeInfluence(index, newValue);
       }
       if (startValue === endValue || elapsedTime > duration) {
         delete animations[key]; // dequeue animation if it has expired
@@ -856,8 +914,7 @@ const Model = ({
     const frame = speechFrames ? sampleFrame(speechFrames, mediaNow) : null;
     if (frame) {
       speechChannels.forEach(([channel, morphIndex]) => {
-        const value = frame[channel];
-        morphMeshes.forEach((mesh: any) => (mesh.morphTargetInfluences[morphIndex] = value));
+        writeInfluence(morphIndex, frame[channel]);
       });
       streamingRef.current = true;
     } else if (streamingRef.current) {
@@ -866,8 +923,24 @@ const Model = ({
       // system regains a clean mouth instead of a frozen final pose.
       const now = Date.now();
       speechChannels.forEach(([, morphIndex, name]) => {
-        setLipsAnimation(name, now, 200, morphMeshes[0].morphTargetInfluences[morphIndex], 0, "lerp");
+        setLipsAnimation(name, now, 200, readInfluence(morphIndex), 0, "lerp");
       });
+    }
+
+    // Rigs without neck shapes turn the head bone instead, about axes fixed to
+    // the model's frame so the bone's own orientation does not matter.
+    if (headBone && rig.virtual.size) {
+      const read = (name: string) => (name in blendShapeIndices ? readInfluence(blendShapeIndices[name]) : 0);
+      const turn = headTurnRef.current;
+      if (!turn.rest) turn.rest = headBone.quaternion.clone();
+      const parent = headBone.parent.getWorldQuaternion(turn.parent);
+      turn.delta.setFromEuler(turn.euler.set(
+        (read("HeadDown") - read("HeadUp")) * PITCH_PER_UNIT,
+        (read("TrunRight") - read("TrunLeft")) * YAW_PER_UNIT,
+        0,
+        "YXZ"
+      ));
+      headBone.quaternion.copy(parent).invert().multiply(turn.delta).multiply(parent).multiply(turn.rest);
     }
   });
 
@@ -884,7 +957,7 @@ const Model = ({
   }, [killAll]);
 
   return (
-    <primitive object={scene} position={position} rotation={rotation} />
+    <primitive object={scene} position={placement} rotation={rotation} />
   );
 };
 

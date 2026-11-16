@@ -9,6 +9,8 @@ import { ChatStatus } from './animations'
 
 export interface AvatarProps {
   modelPath: string;
+  // Omit to frame the model on its head bone.
+  position?: [number, number, number];
   visemes?: VisemeData[];
   currentChatStatus: ChatStatus
   audioElRef?: { current: HTMLAudioElement | null };
@@ -19,7 +21,7 @@ export interface AvatarProps {
   blinkingEnabled?: boolean;
 }
 
-export const Avatar = ({ modelPath, visemes, currentChatStatus, audioElRef, blendShapeFrames, expressionsEnabled, headMovementEnabled, gazeEnabled, blinkingEnabled }: AvatarProps) => {
+export const Avatar = ({ modelPath, position, visemes, currentChatStatus, audioElRef, blendShapeFrames, expressionsEnabled, headMovementEnabled, gazeEnabled, blinkingEnabled }: AvatarProps) => {
   return (
     <GlbAvatar
       src={modelPath}
@@ -34,7 +36,7 @@ export const Avatar = ({ modelPath, visemes, currentChatStatus, audioElRef, blen
       blendShapeIndices={blendShapeIndices}
       randomExpressions={randomExpressions}
       visemes={visemes}
-      position={[0, -1.72, 0]}
+      position={position}
       rotation={[0, 0, 0]}
       currentChatStatus={currentChatStatus}
       camera={{
