@@ -1,0 +1,1 @@
+`ict-facekit.glb` is built by `scripts/ict-facekit-to-glb.mjs` from [USC ICT-FaceKit](https://github.com/ICT-VGL/ICT-FaceKit), Copyright (c) 2020 USC Institute for Creative Technologies, MIT License: https://github.com/ICT-VGL/ICT-FaceKit/blob/master/LICENSE

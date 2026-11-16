@@ -1,0 +1,4 @@
+{
+  "labels": { "ict-facekit": "ICT FaceKit" },
+  "source": { "build": "scripts/ict-facekit-to-glb.mjs" }
+}
