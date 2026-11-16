@@ -2,7 +2,7 @@
 
 This CDK stack creates a private S3 bucket and public CloudFront distribution for the Ava web app, plus one API Gateway `/tts` route backed by a Lambda function. It does not deploy automatically from GitHub.
 
-With AWS credentials configured, set `SPEECH_KEY`, `SPEECH_REGION`, and `OPENAI_API_KEY` in your shell. Then build and deploy the backend:
+With AWS credentials configured, set `SPEECH_KEY`, `SPEECH_REGION`, and either `OPENAI_API_KEY` or `GEMINI_API_KEY` in your shell. Then build and deploy the backend:
 
 ```sh
 cd backend && npm ci && npm run build

@@ -41,6 +41,7 @@ export class TalkingHead extends Construct {
         SPEECH_KEY: process.env.SPEECH_KEY!,
         SPEECH_REGION: process.env.SPEECH_REGION!,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
+        GEMINI_API_KEY: process.env.GEMINI_API_KEY!,
       },
     });
     restApi.root.addResource("tts").addMethod("POST", new LambdaIntegration(ttsHandler));
