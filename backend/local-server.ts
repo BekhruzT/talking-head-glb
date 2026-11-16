@@ -10,8 +10,8 @@ const CORS = {
   "access-control-allow-methods": "POST,OPTIONS",
 };
 
-for (const key of ["SPEECH_KEY", "SPEECH_REGION", "OPENAI_API_KEY"]) {
-  if (!process.env[key]) {
+for (const key of ["SPEECH_KEY", "SPEECH_REGION", "OPENAI_API_KEY or GEMINI_API_KEY"]) {
+  if (!key.split(" or ").some((name) => process.env[name])) {
     console.error(`Missing ${key}. Set it in the repo-root .env file.`);
     process.exit(1);
   }

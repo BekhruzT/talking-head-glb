@@ -26,7 +26,7 @@ npm run setup:model
 
 The command verifies the model and installs it at `frontend/public/models/ava/ava.glb`. The path is ignored by Git. If your account lacks access, setup exits with an explanation and leaves the model uninstalled; request access through the issue link above. A public clone can start the web app without the model, but the app will show setup instructions instead of Ava until this step succeeds.
 
-1. Copy `.env.template` to `.env` in the repository root. Set `SPEECH_KEY`, `SPEECH_REGION`, and `OPENAI_API_KEY`.
+1. Copy `.env.template` to `.env` in the repository root. Set `SPEECH_KEY`, `SPEECH_REGION`, and either `OPENAI_API_KEY` or `GEMINI_API_KEY`.
 2. Create `frontend/.env.local` with `REACT_APP_BACKEND_ENDPOINT=http://localhost:4000`.
 3. Start the backend in one terminal:
 
