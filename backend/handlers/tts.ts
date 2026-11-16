@@ -5,11 +5,9 @@ import {
 } from "microsoft-cognitiveservices-speech-sdk";
 
 import { Configuration, OpenAIApi } from "openai";
-const gemini = process.env.GEMINI_API_KEY;
-const configuration = new Configuration(gemini
-  ? { apiKey: gemini, basePath: "https://generativelanguage.googleapis.com/v1beta/openai" }
-  : { apiKey: process.env.OPENAI_API_KEY });
-const model = gemini ? "gemini-3.5-flash-lite" : process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+import { LANGUAGE, PROVIDERS, VOICE } from "../config.ts";
+const { key, basePath, model } = PROVIDERS.find((provider) => process.env[provider.key]) ?? PROVIDERS[PROVIDERS.length - 1];
+const configuration = new Configuration({ apiKey: process.env[key], basePath });
 
 const prompt = `
 I am a laid-back conversationalist, open to chat about anything the user would like.
@@ -66,8 +64,8 @@ export const handler = (event: any, context: any) => {
         process.env.SPEECH_KEY!,
         process.env.SPEECH_REGION!
       );
-      speechConfig.speechSynthesisLanguage = "en-US";
-      speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural";
+      speechConfig.speechSynthesisLanguage = LANGUAGE;
+      speechConfig.speechSynthesisVoiceName = VOICE;
       speechConfig.speechSynthesisOutputFormat = SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
       const synthesizer = new SpeechSynthesizer(speechConfig);
       let visemeData = new Array();
@@ -103,7 +101,7 @@ export const handler = (event: any, context: any) => {
         words.push({ text: e.text, offset: e.audioOffset, duration: e.duration });
       };
 
-      let ssmlText = `<speak version='1.0' xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang='en-US'><voice name='en-US-JennyNeural'><mstts:viseme type='FacialExpression'/><mstts:express-as style='${style}'>${text}</mstts:express-as></voice></speak>`;
+      let ssmlText = `<speak version='1.0' xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang='${LANGUAGE}'><voice name='${VOICE}'><mstts:viseme type='FacialExpression'/><mstts:express-as style='${style}'>${text}</mstts:express-as></voice></speak>`;
 
       synthesizer.speakSsmlAsync(
         ssmlText,

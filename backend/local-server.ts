@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { handler as tts } from "./handlers/tts.ts";
+import { PROVIDERS } from "./config.ts";
 
 // Local speech endpoint for Ava.
 const PORT = Number(process.env.PORT ?? 4000);
@@ -10,7 +11,7 @@ const CORS = {
   "access-control-allow-methods": "POST,OPTIONS",
 };
 
-for (const key of ["SPEECH_KEY", "SPEECH_REGION", "OPENAI_API_KEY or GEMINI_API_KEY"]) {
+for (const key of ["SPEECH_KEY", "SPEECH_REGION", PROVIDERS.map((provider) => provider.key).reverse().join(" or ")]) {
   if (!key.split(" or ").some((name) => process.env[name])) {
     console.error(`Missing ${key}. Set it in the repo-root .env file.`);
     process.exit(1);
