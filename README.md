@@ -46,6 +46,19 @@ The command verifies the model and installs it at `frontend/public/models/ava/av
 
 Open [http://localhost:3000](http://localhost:3000) and use the microphone button to speak with Ava. Browser speech recognition must be available and microphone access allowed.
 
+### Other heads (optional)
+
+Any GLB with ARKit blendshapes can stand in for Ava; Rocketbox `AK_*` and Oculus viseme names are mapped automatically, and a head without neck shapes turns its head bone instead. The app loads whichever of these files exist (GLBs are ignored by Git) and falls back to them when Ava is missing; `?model=<id>` starts on one.
+
+```sh
+# Microsoft Rocketbox (MIT): any id from the dataset, e.g. medical-female-01, medical-male-01, business-female-02, business-male-03
+curl -L -o frontend/public/models/rocketbox/medical-male-01.glb https://huggingface.co/datasets/codepawl/rocketbox-avatars-glb/resolve/main/objects/medical-male-01/medical-male-01.glb
+# MakeHuman / MPFB from met4citizen/TalkingHead (CC0)
+curl -L -o frontend/public/models/mpfb/mpfb.glb https://github.com/met4citizen/TalkingHead/raw/main/avatars/mpfb.glb
+# USC ICT-FaceKit (MIT), converted locally
+node scripts/ict-facekit-to-glb.mjs
+```
+
 ## Project areas
 
 - [`frontend/`](frontend/) — React web app and browser avatar.
