@@ -3,6 +3,7 @@ import { Avatar, IconTray, VisemeData } from "./components";
 import { MicState } from "./components/icon-tray/mic";
 import { AudioState } from "./components/icon-tray/audio";
 import { MotionControls } from "./components/motion-controls";
+import { HeadPicker } from "./components/head-picker";
 import { MotionSettings } from "./components/avatar/motion-settings";
 
 import { ChatStatus } from './components/avatar/animations';
@@ -46,7 +47,7 @@ export interface Media {
 
 function App() {
   const [availableHeads, setAvailableHeads] = useState<Head[]>();
-  const headId = REQUESTED ?? "ava";
+  const [headId, setHeadId] = useState(REQUESTED ?? "ava");
   const head = availableHeads?.find((h) => h.id === headId) ?? availableHeads?.[0];
   const modelAvailability = !availableHeads ? "checking" : head ? "available" : "unavailable";
   const [motionSettings, setMotionSettings] = useState<MotionSettings>({
@@ -192,6 +193,9 @@ function App() {
             </div>
           )}
         </div>
+      {head && availableHeads!.length > 1 && (
+        <HeadPicker heads={availableHeads!} selected={head.id} onSelect={setHeadId} />
+      )}
       {modelAvailability === "available" && (
         <MotionControls
           settings={motionSettings}

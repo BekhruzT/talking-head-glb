@@ -81,9 +81,30 @@
   cursor: pointer;
 }
 
+/* Same pill and panel as Motion, centred so it clears the FPS counter. */
+.head-picker {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.head-picker .motion-controls__button {
+  margin: 0 auto;
+}
+
+.head-picker__caret {
+  margin-left: 2px;
+  color: #d4bdff;
+  font-size: 11px;
+}
+
 @media (max-width: 600px) {
   .motion-controls {
     top: 12px;
     right: 12px;
+  }
+
+  .head-picker {
+    right: auto;
   }
 }

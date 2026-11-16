@@ -19,14 +19,21 @@ beforeEach(() => {
   });
 });
 
-test("loads Ava by default when her model is found", async () => {
+test("loads Ava by default and the picker switches to another head", async () => {
   render(<App />);
 
-  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", "/models/ava/ava.glb");
+  const avatar = await screen.findByTestId("avatar");
+  expect(avatar).toHaveAttribute("data-model", "/models/ava/ava.glb");
   expect(screen.getByTestId("controls")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: /avatar: ava/i }));
+  fireEvent.click(screen.getByRole("radio", { name: "Medical male 01" }));
+  expect(screen.getByTestId("avatar")).toHaveAttribute("data-model", "/models/rocketbox/medical-male-01.glb");
+  expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /avatar: medical male 01/i })).toBeInTheDocument();
 });
 
-test("falls back to the first head whose file exists when Ava is missing", async () => {
+test("the picker lists only heads whose files exist, falling back when Ava is missing", async () => {
   const present = ["/models/rocketbox/medical-female-01.glb", "/models/rocketbox/business-male-03.glb"];
   (global.fetch as jest.Mock).mockImplementation(async (url: string) => ({
     ok: present.includes(url),
@@ -35,6 +42,9 @@ test("falls back to the first head whose file exists when Ava is missing", async
   render(<App />);
 
   expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", present[0]);
+  fireEvent.click(screen.getByRole("button", { name: /avatar/i }));
+  expect(screen.getAllByRole("radio").map((radio) => radio.getAttribute("value"))).toEqual(["medical-female-01", "business-male-03"]);
+  expect(screen.getByRole("radio", { name: "Medical female 01" })).toBeChecked();
 });
 
 test("motion checkboxes switch head, gaze, expressions, and blinking independently", async () => {
