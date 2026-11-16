@@ -2,76 +2,39 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 
 jest.mock("./components", () => ({
-  Avatar: ({ modelPath, settings, headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled }: {
+  Avatar: ({ modelPath, headMovementEnabled, gazeEnabled, expressionsEnabled, blinkingEnabled }: {
     modelPath: string;
-    settings?: { position?: number[] };
     headMovementEnabled: boolean;
     gazeEnabled: boolean;
     expressionsEnabled: boolean;
     blinkingEnabled: boolean;
-  }) => <div data-testid="avatar" data-model={modelPath} data-position={JSON.stringify(settings?.position)} data-head={headMovementEnabled} data-gaze={gazeEnabled} data-expressions={expressionsEnabled} data-blinking={blinkingEnabled} />,
+  }) => <div data-testid="avatar" data-model={modelPath} data-head={headMovementEnabled} data-gaze={gazeEnabled} data-expressions={expressionsEnabled} data-blinking={blinkingEnabled} />,
   IconTray: () => <div data-testid="controls" />,
 }));
 
-const AVA = { id: "ava", family: "ava", label: "Ava", path: "/models/ava/ava.glb" };
-const MEDIC = { id: "medical-female-01", family: "rocketbox", label: "Medical female 01", path: "/models/rocketbox/medical-female-01.glb" };
+beforeEach(() => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    headers: { get: () => "model/gltf-binary" },
+  });
+});
 
-// Serves the given JSON files; any other URL gets the dev server's index.html fallback.
-const serve = (files: { [url: string]: unknown }) => {
-  global.fetch = jest.fn(async (url: string) => url in files
-    ? { ok: true, headers: { get: () => "application/json" }, json: async () => files[url] }
-    : { ok: true, headers: { get: () => "text/html" }, json: async () => { throw new SyntaxError("not JSON"); } }) as jest.Mock;
-};
-
-beforeEach(() => serve({
-  "/models/heads.json": [AVA, MEDIC],
-  "/models/ava/family.json": { overrides: { ava: { position: [0, -1.5, 0] } } },
-  "/models/rocketbox/family.json": { source: { url: "https://example.com/{id}.glb" } },
-}));
-
-afterEach(() => window.history.pushState({}, "", "/"));
-
-test("loads Ava by default when the manifest lists her", async () => {
+test("loads Ava by default when her model is found", async () => {
   render(<App />);
 
   expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", "/models/ava/ava.glb");
   expect(screen.getByTestId("controls")).toBeInTheDocument();
 });
 
-test("loads the first listed head when the manifest has no Ava", async () => {
-  serve({ "/models/heads.json": [MEDIC] });
+test("falls back to the first head whose file exists when Ava is missing", async () => {
+  const present = ["/models/rocketbox/medical-female-01.glb", "/models/rocketbox/business-male-03.glb"];
+  (global.fetch as jest.Mock).mockImplementation(async (url: string) => ({
+    ok: present.includes(url),
+    headers: { get: () => (present.includes(url) ? "model/gltf-binary" : "text/html") },
+  }));
   render(<App />);
 
-  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", MEDIC.path);
-});
-
-test("a head's overrides come from its family.json", async () => {
-  render(<App />);
-
-  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-position", "[0,-1.5,0]");
-});
-
-test("a head whose family.json gives no overrides loads with the defaults", async () => {
-  window.history.pushState({}, "", "/?model=medical-female-01");
-  render(<App />);
-
-  const avatar = await screen.findByTestId("avatar");
-  expect(avatar).toHaveAttribute("data-model", MEDIC.path);
-  expect(avatar).not.toHaveAttribute("data-position");
-});
-
-test("a head whose family.json is missing loads with the defaults", async () => {
-  serve({ "/models/heads.json": [MEDIC] });
-  render(<App />);
-
-  expect(await screen.findByTestId("avatar")).not.toHaveAttribute("data-position");
-});
-
-test("?model= picks that manifest entry", async () => {
-  window.history.pushState({}, "", "/?model=medical-female-01");
-  render(<App />);
-
-  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", MEDIC.path);
+  expect(await screen.findByTestId("avatar")).toHaveAttribute("data-model", present[0]);
 });
 
 test("motion checkboxes switch head, gaze, expressions, and blinking independently", async () => {
@@ -95,14 +58,17 @@ test("motion checkboxes switch head, gaze, expressions, and blinking independent
 });
 
 test.each([
-  { ok: false, contentType: "application/json" },
+  { ok: false, contentType: "text/html" },
   { ok: true, contentType: "text/html" },
-])("shows model setup guidance when no head is installed: %p", async ({ ok, contentType }) => {
-  global.fetch = jest.fn().mockResolvedValue({ ok, headers: { get: () => contentType }, json: async () => [] });
+])("shows model setup guidance when the asset is unavailable: %p", async ({ ok, contentType }) => {
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok,
+    headers: { get: () => contentType },
+  });
 
   render(<App />);
 
-  expect(await screen.findByRole("alert")).toHaveTextContent(/npm run setup:model -- ava/i);
+  expect(await screen.findByRole("alert")).toHaveTextContent(/npm run setup:model/i);
   expect(screen.getByRole("link", { name: /request access/i })).toBeInTheDocument();
   expect(screen.queryByTestId("avatar")).not.toBeInTheDocument();
   expect(screen.queryByTestId("controls")).not.toBeInTheDocument();

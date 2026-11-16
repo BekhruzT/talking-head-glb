@@ -1,5 +1,0 @@
-{
-  "labels": { "ava": "Ava" },
-  "source": { "repo": "BekhruzT/talking-head-glb-model", "sha256": "1821dabc3e0ab62359b7b07d9504970391398375421175cba0b6e5c0a9d45792" },
-  "overrides": { "ava": { "position": [0, -1.72, 0] } }
-}

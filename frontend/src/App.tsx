@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, IconTray, VisemeData } from "./components";
-import { HeadSettings } from "./components/avatar";
 import { MicState } from "./components/icon-tray/mic";
 import { AudioState } from "./components/icon-tray/audio";
 import { MotionControls } from "./components/motion-controls";
@@ -13,22 +12,29 @@ const BACKEND_ENDPOINT = process.env.REACT_APP_BACKEND_ENDPOINT!;
 // avatar down to lip-sync without a rebuild or injected script:
 //   ?noExpressions=1    no emotions, blinks, or gaze
 //   ?noHeadMovement=1   no neck turn or head bob
-//   ?model=<id>         start on any installed head instead of Ava
+//   ?model=<name>       start on any GLB under public/models/rocketbox/ instead of Ava
 const evalFlags = new URLSearchParams(window.location.search);
 
 interface Head {
   id: string;
   label: string;
-  family: string;
   path: string;
-  settings?: HeadSettings;
+  position?: [number, number, number];
 }
-
-// The dev server answers a missing file with index.html, so a 200 alone proves nothing.
-const readJson = (url: string, signal: AbortSignal): Promise<any> =>
-  fetch(url, { signal })
-    .then((response) => (response.ok && !response.headers.get("content-type")?.toLowerCase().includes("text/html") ? response.json() : undefined))
-    .catch(() => undefined);
+const rocketbox = (id: string): Head => ({
+  id,
+  label: id[0].toUpperCase() + id.slice(1).replace(/-/g, " "),
+  path: `/models/rocketbox/${id}.glb`,
+});
+const REQUESTED = evalFlags.get("model")?.replace(/[^\w-]/g, "");
+const KNOWN = ["medical-female-01", "medical-male-01", "business-female-02", "business-male-03"];
+// The Rocketbox heads are optional downloads, so the picker shows whichever are present.
+const HEADS: Head[] = [
+  { id: "ava", label: "Ava", path: "/models/ava/ava.glb", position: [0, -1.72, 0] },
+  { id: "ict-facekit", label: "ICT FaceKit", path: "/models/ict/ict-facekit.glb" },
+  { id: "mpfb", label: "MakeHuman", path: "/models/mpfb/mpfb.glb" },
+  ...[...KNOWN, ...(REQUESTED && !KNOWN.includes(REQUESTED) && REQUESTED !== "ict-facekit" ? [REQUESTED] : [])].map(rocketbox),
+];
 
 export interface Media {
   audio: string;
@@ -40,7 +46,7 @@ export interface Media {
 
 function App() {
   const [availableHeads, setAvailableHeads] = useState<Head[]>();
-  const headId = new URLSearchParams(window.location.search).get("model")?.replace(/[^\w-]/g, "") ?? "ava";
+  const headId = REQUESTED ?? "ava";
   const head = availableHeads?.find((h) => h.id === headId) ?? availableHeads?.[0];
   const modelAvailability = !availableHeads ? "checking" : head ? "available" : "unavailable";
   const [motionSettings, setMotionSettings] = useState<MotionSettings>({
@@ -63,12 +69,13 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    readJson("/models/heads.json", controller.signal).then(async (manifest) => {
-      const heads: Head[] = (Array.isArray(manifest) ? manifest : []).filter((h) => [h?.id, h?.family, h?.path].every((field) => typeof field === "string"));
-      const families = Object.fromEntries(await Promise.all(
-        Array.from(new Set(heads.map((h) => h.family)), async (family) => [family, await readJson(`/models/${family}/family.json`, controller.signal)])
-      ));
-      if (!controller.signal.aborted) setAvailableHeads(heads.map((h) => ({ ...h, settings: families[h.family]?.overrides?.[h.id] })));
+    // The dev server answers a missing file with index.html, so a 200 alone proves nothing.
+    const exists = (head: Head) =>
+      fetch(head.path, { method: "HEAD", signal: controller.signal })
+        .then((response) => response.ok && !response.headers.get("content-type")?.toLowerCase().includes("text/html"))
+        .catch(() => false);
+    Promise.all(HEADS.map(exists)).then((found) => {
+      if (!controller.signal.aborted) setAvailableHeads(HEADS.filter((_, i) => found[i]));
     });
     return () => controller.abort();
   }, []);
@@ -169,7 +176,7 @@ function App() {
             <Avatar
               key={head.id}
               modelPath={head.path}
-              settings={head.settings}
+              position={head.position}
               visemes={visemes}
               currentChatStatus={currentChatStatus}
               audioElRef={audioElRef}
@@ -180,7 +187,7 @@ function App() {
           {modelAvailability === "unavailable" && (
             <div role="alert" style={{ background: "rgba(255,255,255,0.94)", borderRadius: "12px", margin: "auto", maxWidth: "32rem", padding: "2rem" }}>
               <h1>Ava's model is unavailable</h1>
-              <p>Run <code>npm run setup:model -- ava</code> from the repository root after your GitHub account has access to the private model.</p>
+              <p>Run <code>npm run setup:model</code> from the repository root after your GitHub account has access to the private model.</p>
               <a href="https://github.com/BekhruzT/talking-head-glb/issues/new">Request access</a>
             </div>
           )}

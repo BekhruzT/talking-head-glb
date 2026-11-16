@@ -9,4 +9,4 @@ cd backend && npm ci && npm run build
 cd ../infra && npm ci && npm run cdk-deploy
 ```
 
-The stack outputs `BackendEndpoint`, `BucketName`, `DistributionId`, and `CloudFrontURL`. Its CloudFront distribution is public. A frontend build made after `npm run setup:model -- ava` contains the private GLB, so **do not upload that build to S3 or another public host**. Public live deployment needs authenticated model delivery; the README video demos do not need it. The stack uses generated AWS resource names and does not configure a custom domain.
+The stack outputs `BackendEndpoint`, `BucketName`, `DistributionId`, and `CloudFrontURL`. Its CloudFront distribution is public. A frontend build made after `npm run setup:model` contains the private GLB, so **do not upload that build to S3 or another public host**. Public live deployment needs authenticated model delivery; the README video demos do not need it. The stack uses generated AWS resource names and does not configure a custom domain.
