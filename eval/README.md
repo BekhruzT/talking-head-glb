@@ -178,7 +178,7 @@ rebuild it without reading why, because it fails for a reason tuning cannot fix.
 ```
 node eval/inputs/upload-server.mjs      # :4100 fixtures + capture uploads
 cd backend && npm run dev               # :4000 real /tts, needs root .env SPEECH_KEY/REGION
-cd frontend && npm start                # :3000 the avatar being recorded
+cd frontend && npm run dev             # :3000 the avatar being recorded
 node eval/inputs/convert-captures.mjs reference    # trim to speech onset, encode H.264
 ```
 

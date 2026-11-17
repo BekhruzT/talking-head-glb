@@ -1,139 +1,81 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Avatar, IconTray, VisemeData } from "./components";
+import { useCallback, useEffect, useState } from "react";
+import { MotionSettings, TalkingHead, Utterance } from "talking-head-glb";
+import { download, installed, InstalledHead, listHeads } from "talking-head-glb/heads";
+import { IconTray } from "./components";
 import { MicState } from "./components/icon-tray/mic";
 import { AudioState } from "./components/icon-tray/audio";
 import { MotionControls } from "./components/motion-controls";
-import { MotionSettings } from "./components/avatar/motion-settings";
+import { HeadPicker } from "./components/head-picker";
 
-import { ChatStatus } from './components/avatar/animations';
-
-const BACKEND_ENDPOINT = process.env.REACT_APP_BACKEND_ENDPOINT!;
-const MODEL_PATH = "/models/ava/ava.glb";
-
+const BACKEND_ENDPOINT = import.meta.env.VITE_BACKEND_ENDPOINT;
 // Eval switches, read once from the URL so a recording session can strip the
 // avatar down to lip-sync without a rebuild or injected script:
 //   ?noExpressions=1    no emotions, blinks, or gaze
 //   ?noHeadMovement=1   no neck turn or head bob
+//   ?model=<ref>        start on an installed head, e.g. rocketbox/medical-female-01
 const evalFlags = new URLSearchParams(window.location.search);
-
-export interface Media {
-  audio: string;
-  visemes: VisemeData[];
-  blendShapeFrames?: number[][];
-  text?: string;
-  emotion: string;
-}
+const CATALOG = listHeads();
 
 function App() {
-  const [modelAvailability, setModelAvailability] = useState<"checking" | "available" | "unavailable">("checking");
+  const [heads, setHeads] = useState<InstalledHead[]>();
+  const [headRef, setHeadRef] = useState(evalFlags.get("model") ?? "ava/ava");
+  const head = heads?.find((h) => h.ref === headRef) ?? heads?.find((h) => h.ref === "ava/ava") ?? heads?.[0];
+  const modelAvailability = !heads ? "checking" : head ? "available" : "unavailable";
+  const [downloads, setDownloads] = useState<Record<string, number | string>>({});
   const [motionSettings, setMotionSettings] = useState<MotionSettings>({
     headMovementEnabled: !evalFlags.has("noHeadMovement"),
     gazeEnabled: !evalFlags.has("noExpressions"),
     expressionsEnabled: !evalFlags.has("noExpressions"),
     blinkingEnabled: !evalFlags.has("noExpressions"),
   });
-  const [audioUrl, setAudioUrl] = useState<string>();
-  const [currentChatStatus, setCurrentChatStatus] = useState<ChatStatus>(ChatStatus.IDLE);
-  const [visemes, setVisemes] = useState<VisemeData[]>();
-  const [blendShapeFrames, setBlendShapeFrames] = useState<number[][]>();
-
+  const [speech, setSpeech] = useState<Utterance>();
+  const [thinking, setThinking] = useState(false);
   const [micState, setMicState] = useState<MicState>(MicState.OFF);
-  const [mediaQueue, setMediaQueue] = useState<Media[]>([]);
   const [audioState, setAudioState] = useState<AudioState>(AudioState.ON);
 
-  // Owned here so the avatar's lip-sync and the voice share one playback clock.
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
-
   useEffect(() => {
-    const controller = new AbortController();
-    fetch(MODEL_PATH, { method: "HEAD", signal: controller.signal })
-      .then((response) => {
-        const isHtmlFallback = response.headers.get("content-type")?.toLowerCase().includes("text/html");
-        setModelAvailability(response.ok && !isHtmlFallback ? "available" : "unavailable");
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") setModelAvailability("unavailable");
-      });
-    return () => controller.abort();
+    installed().then(setHeads);
   }, []);
 
-  const cleanUpAudio = useCallback((base64Audio: string) => {
-    let audio = base64Audio;
-    // remove padding from last
-    audio = audio.replaceAll(
-      /q+(\/\/NI.{14}q+pMQU1FMy4xMDCq+)+\/\/NI.{14}q+$/g,
-      ""
-    );
-    audio = audio.replaceAll(
-      /V+(\/\/NI.{14}V+MQU1FMy4xMDBV+)+\/\/NI.{14}V+$/g,
-      ""
-    );
-    return audio;
+  const onDownload = useCallback((ref: string) => {
+    const progress = (value: number | string) => setDownloads((current) => ({ ...current, [ref]: value }));
+    progress(0);
+    download(ref, { onProgress: progress })
+      .then(() => installed())
+      .then((list) => {
+        setHeads(list);
+        setHeadRef(ref);
+        setDownloads(({ [ref]: _done, ...rest }) => rest);
+      })
+      .catch((error: Error) => progress(error.message));
   }, []);
 
   const onUserMessage = useCallback((message?: string) => {
-    if (message) {
-      setCurrentChatStatus((status: ChatStatus) => {
-        if (status === ChatStatus.IDLE) { return ChatStatus.SENT }
-        else { return status }
+    if (!message) return;
+    setThinking(true);
+    const chatHistory = JSON.parse(sessionStorage.getItem("chatHistory") ?? "[]");
+    chatHistory.push({ role: "user", content: message });
+    fetch(BACKEND_ENDPOINT + "/tts", { method: "POST", body: JSON.stringify({ chat: true, messages: chatHistory }) })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `chat answered ${res.status}`);
+        return data;
       })
-      let chatHistory = JSON.parse(sessionStorage.getItem("chatHistory") ?? '[]')
-      chatHistory.push({ "role": "user", "content": message });
-
-      fetch(BACKEND_ENDPOINT + "/tts", {
-        method: "POST",
-        body: JSON.stringify({ chat: true, messages: chatHistory }),
+      .then((data) => {
+        setSpeech({ audio: data.audio, visemes: data.visemes, blendShapeFrames: data.blendShapeFrames, emotion: data.emotion });
+        chatHistory.push({ role: "assistant", content: JSON.stringify({ text: data.text, emotion: data.emotion.trim().toLowerCase() }) });
+        sessionStorage.setItem("chatHistory", JSON.stringify(chatHistory));
       })
-        .then((res) => res.json())
-        .then((data) => {
-          setMediaQueue((mediaQueue) => [
-            ...mediaQueue,
-            { ...data },
-          ]);
-
-          chatHistory.push({ "role": "assistant", "content": JSON.stringify({ "text": data.text, "emotion": data.emotion.trim().toLowerCase() }) })
-          sessionStorage.setItem("chatHistory", JSON.stringify(chatHistory));
-        });
-    }
+      .catch((error) => console.error("chat failed:", error))
+      .finally(() => setThinking(false));
   }, []);
 
-  const processQueue = () => {
-    if (mediaQueue?.length) { // there is speech enqueued. bot speech is disabled
-      if (micState === MicState.ON) setMicState(MicState.DISABLED_ON);
-      else if (micState === MicState.OFF) setMicState(MicState.DISABLED_OFF);
-    } else if (!audioUrl) { // there is no audio playing. bot speech is enabled.
-      if (micState === MicState.DISABLED_ON) setMicState(MicState.ON);
-      else if (micState === MicState.DISABLED_OFF) setMicState(MicState.OFF);
-    }
-
-    if (mediaQueue?.length && !audioUrl) { // start media play if any enqueued and no audio playing
-      const { audio, visemes, emotion, blendShapeFrames } = mediaQueue.shift()!;
-      setAudioUrl("data:audio/mp3;base64," + cleanUpAudio(audio));
-      setVisemes(visemes);
-      setBlendShapeFrames(blendShapeFrames);
-      const em = emotion.trim().toLowerCase()
-
-      if (em === 'happy')
-        setCurrentChatStatus(ChatStatus.RESPONDINGHAPPY);
-      else if (em === 'empathetic')
-        setCurrentChatStatus(ChatStatus.RESPONDINGSAD);
-      else if (em === 'excited')
-        setCurrentChatStatus(ChatStatus.RESPONDINGSURPRISED);
-      else
-        setCurrentChatStatus(ChatStatus.RESPONDINGNEUTRAL);
-    }
-    else if (!mediaQueue?.length && !audioUrl) { // no media playing or enqueued => initiate idle
-      setCurrentChatStatus(ChatStatus.IDLE);
-    }
-  };
-
-  useEffect(() => {
-    processQueue();
-  }, [mediaQueue, audioUrl]); // eslint-disable-line
-
-  const onAudioEnd = useCallback(() => {
-    setAudioUrl(undefined);
-  }, [setAudioUrl]);
+  // The mic stays disabled while the avatar speaks, keeping the on/off choice for afterwards.
+  const onSpeakingChange = useCallback((speaking: boolean) => {
+    setMicState((state) => speaking
+      ? (state === MicState.ON ? MicState.DISABLED_ON : state === MicState.OFF ? MicState.DISABLED_OFF : state)
+      : (state === MicState.DISABLED_ON ? MicState.ON : state === MicState.DISABLED_OFF ? MicState.OFF : state));
+  }, []);
 
   return (
     <>
@@ -149,24 +91,28 @@ function App() {
             margin: "auto",
           }}
         >
-          {modelAvailability === "available" && (
-            <Avatar
-              modelPath={MODEL_PATH}
-              visemes={visemes}
-              currentChatStatus={currentChatStatus}
-              audioElRef={audioElRef}
-              blendShapeFrames={blendShapeFrames}
-              {...motionSettings}
+          {head && (
+            <TalkingHead
+              key={head.ref}
+              head={head.ref}
+              speech={speech}
+              thinking={thinking}
+              motion={motionSettings}
+              muted={audioState === AudioState.OFF}
+              onSpeakingChange={onSpeakingChange}
+              onError={(error) => console.error("speech failed:", error)}
             />
           )}
           {modelAvailability === "unavailable" && (
             <div role="alert" style={{ background: "rgba(255,255,255,0.94)", borderRadius: "12px", margin: "auto", maxWidth: "32rem", padding: "2rem" }}>
-              <h1>Ava's model is unavailable</h1>
-              <p>Run <code>npm run setup:model</code> from the repository root after your GitHub account has access to the private model.</p>
-              <a href="https://github.com/BekhruzT/talking-head-glb/issues/new">Request access</a>
+              <h1>No avatar installed</h1>
+              <p>Download a head from the picker, or run <code>npm run heads -- add ava/ava</code> for Ava.</p>
             </div>
           )}
         </div>
+      {heads && (
+        <HeadPicker heads={CATALOG} installed={heads} selected={head?.ref} downloads={downloads} onSelect={setHeadRef} onDownload={onDownload} />
+      )}
       {modelAvailability === "available" && (
         <MotionControls
           settings={motionSettings}
@@ -185,14 +131,11 @@ function App() {
         }}
       >
         <IconTray
-          audioUrl={audioUrl}
           onTranscription={onUserMessage}
-          onAudioEnd={onAudioEnd}
           micState={micState}
           setMicState={setMicState}
           audioState={audioState}
           setAudioState={setAudioState}
-          audioElRef={audioElRef}
         />
       </div>}
     </>

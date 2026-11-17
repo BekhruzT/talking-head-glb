@@ -14,12 +14,8 @@
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import {
-  SpeechConfig,
-  SpeechSynthesizer,
-  SpeechSynthesisOutputFormat,
-} from "microsoft-cognitiveservices-speech-sdk";
-import { normalizeFrames } from "../frontend/src/components/avatar/blendshape-stream.ts";
+import { normalizeFrames } from "../packages/talking-head/src/avatar/blendshape-stream.ts";
+import { synthesize } from "../packages/talking-head/src/server/index.ts";
 
 const FIXTURE_DIR = join(import.meta.dirname, "eval-fixtures");
 const FPS = 60;
@@ -48,36 +44,10 @@ interface Fixture { id: string; text: string; visemes: VisemeEvent[]; frames: nu
 
 // ---------------------------------------------------------------- recording
 
-function synthesizeCase(c: { id: string; text: string }): Promise<Fixture> {
-  return new Promise((resolve, reject) => {
-    const cfg = SpeechConfig.fromSubscription(process.env.SPEECH_KEY!, process.env.SPEECH_REGION!);
-    cfg.speechSynthesisLanguage = "en-US";
-    cfg.speechSynthesisVoiceName = "en-US-JennyNeural";
-    cfg.speechSynthesisOutputFormat = SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
-    const synth = new SpeechSynthesizer(cfg);
-
-    const visemes: VisemeEvent[] = [];
-    const frames: number[][] = [];
-    synth.visemeReceived = (_s, e) => {
-      if (e.animation) {
-        const chunk = JSON.parse(e.animation);
-        (chunk.BlendShapes ?? []).forEach((frame: number[], i: number) => {
-          // same 2-decimal rounding the shipped tts handler applies
-          frames[chunk.FrameIndex + i] = frame.map((v) => Math.round(v * 100) / 100);
-        });
-        return;
-      }
-      visemes.push({ t: e.audioOffset / 10000, id: e.visemeId });
-    };
-
-    // identical SSML shape to handlers/tts.ts, default chat style
-    const ssml = `<speak version='1.0' xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang='en-US'><voice name='en-US-JennyNeural'><mstts:viseme type='FacialExpression'/><mstts:express-as style='chat'>${c.text}</mstts:express-as></voice></speak>`;
-    synth.speakSsmlAsync(
-      ssml,
-      () => { synth.close(); resolve({ id: c.id, text: c.text, visemes, frames }); },
-      (err) => { synth.close(); reject(err); }
-    );
-  });
+// The shipped synthesis, neutral emotion so the default chat style.
+async function synthesizeCase(c: { id: string; text: string }): Promise<Fixture> {
+  const { visemes, blendShapeFrames } = await synthesize({ text: c.text }, { key: process.env.SPEECH_KEY!, region: process.env.SPEECH_REGION! });
+  return { id: c.id, text: c.text, visemes: visemes.map((v) => ({ t: v.audioOffset / 10000, id: v.visemeId })), frames: blendShapeFrames };
 }
 
 async function record() {

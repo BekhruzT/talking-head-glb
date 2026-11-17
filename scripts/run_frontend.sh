@@ -8,4 +8,4 @@ fi
 
 dir="$(pwd)"
 
-cd "$dir/frontend" && npm install && npm run start
+cd "$dir" && npm install && npm run dev -w frontend

@@ -1,7 +1,5 @@
-import { useEffect, useRef } from "react";
 import IconButton from "@mui/material/IconButton";
-import VolumeUpIcon from '@mui/icons-material/VolumeUp';
-import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import { VolumeUp as VolumeUpIcon, VolumeOff as VolumeOffIcon } from "@mui/icons-material";
 
 export enum AudioState {
   ON,
@@ -9,47 +7,12 @@ export enum AudioState {
 }
 
 export interface AvatarVoiceProps {
-  url?: string;
-  onEnd?: () => void;
   state: AudioState;
-  setState: (audioStae: AudioState) => void;
-  // Shared with the avatar so lip-sync can read this element's playback clock.
-  elementRef?: { current: HTMLAudioElement | null };
+  setState: (audioState: AudioState) => void;
 }
 
-export const AvatarVoice = ({ url, onEnd, state, setState, elementRef }: AvatarVoiceProps) => {
-  const muted = state === AudioState.OFF;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const Icon = muted ? VolumeOffIcon : VolumeUpIcon;
-
-  useEffect(() => {
-    function isValidBase64(str: string) {
-      const regex = /^data:audio\/([a-zA-Z0-9]+);base64,([a-zA-Z0-9+/]+={0,2})$/;
-      return regex.test(str);
-    }
-
-    if (url) {
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      if (elementRef) elementRef.current = audio;
-      if (onEnd) audio.onended = onEnd;
-      audio.muted = muted;
-      if (isValidBase64(url)){
-        audio.play();
-      } else {
-        console.log("Current audio is of invalid format", url)
-        const event = new Event('ended');
-        audio.dispatchEvent(event);
-      }
-      return () => onEnd && audio.removeEventListener("ended", onEnd);
-    }
-  }, [url, onEnd]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.muted = muted;
-    }
-  }, [muted]);
+export const AvatarVoice = ({ state, setState }: AvatarVoiceProps) => {
+  const Icon = state === AudioState.OFF ? VolumeOffIcon : VolumeUpIcon;
 
   return (
     <IconButton
@@ -63,10 +26,7 @@ export const AvatarVoice = ({ url, onEnd, state, setState, elementRef }: AvatarV
         boxShadow:
             "0 8px 16px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19)",
       }}
-      onClick={() => {
-        if (state === AudioState.ON) setState!(AudioState.OFF);
-        else if (state === AudioState.OFF) setState!(AudioState.ON);
-      }}
+      onClick={() => setState(state === AudioState.ON ? AudioState.OFF : AudioState.ON)}
     >
       <Icon
         style={{

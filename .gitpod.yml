@@ -7,5 +7,5 @@ tasks:
       cp .env.template .env
       git lfs fetch --all
       git lfs checkout
-      cd frontend && npm install
+      npm install
     command: ./scripts/run_frontend.sh

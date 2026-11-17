@@ -1,7 +1,8 @@
 build/
+dist/
 node_modules/
 *.glb
-frontend/public/models/ava/
+frontend/public/heads/
 .env
 frontend/.env.local
 .DS_Store
@@ -19,5 +20,7 @@ eval/inputs2/etf*/*
 eval/_ab/*.webm
 eval/_ab/*.mp4
 eval/*.mp4
+eval/rig-*.png
+eval/rig-results.json
 
 eval/inputs/deep-filter.exe

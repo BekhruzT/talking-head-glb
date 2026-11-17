@@ -30,7 +30,8 @@
 }
 
 .motion-controls__button:focus-visible,
-.motion-controls__option input:focus-visible {
+.motion-controls__option input:focus-visible,
+.head-picker__download:focus-visible {
   outline: 2px solid #c6afff;
   outline-offset: 3px;
 }
@@ -81,9 +82,61 @@
   cursor: pointer;
 }
 
+/* Same pill and panel as Motion, centred so it clears the FPS counter. */
+.head-picker {
+  right: auto;
+  left: 50%;
+  width: min(340px, calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+
+.head-picker__missing {
+  flex-wrap: wrap;
+  cursor: default;
+}
+
+.head-picker__missing code {
+  color: #ded7ed;
+  font-size: 11px;
+  user-select: all;
+}
+
+.head-picker__missing small {
+  flex-basis: 100%;
+  color: #ffb4b4;
+}
+
+.head-picker__download {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: #4b3d79;
+  color: inherit;
+  cursor: pointer;
+  font: 600 12px system-ui, sans-serif;
+}
+
+.head-picker__download:disabled {
+  cursor: progress;
+}
+
+.head-picker .motion-controls__button {
+  margin: 0 auto;
+}
+
+.head-picker__caret {
+  margin-left: 2px;
+  color: #d4bdff;
+  font-size: 11px;
+}
+
 @media (max-width: 600px) {
   .motion-controls {
     top: 12px;
     right: 12px;
+  }
+
+  .head-picker {
+    right: auto;
   }
 }

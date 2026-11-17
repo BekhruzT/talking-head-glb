@@ -14,7 +14,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { AZURE_BLENDSHAPE_NAMES, STREAM_FPS } from "../../frontend/src/components/avatar/blendshape-stream.ts";
+import { AZURE_BLENDSHAPE_NAMES, STREAM_FPS } from "../../packages/talking-head/src/avatar/blendshape-stream.ts";
 import { ARKIT, RAW, envelope, readNpy, readWav, silenceMask } from "./check-sync.mjs";
 
 const TARGET_SECONDS = 12;

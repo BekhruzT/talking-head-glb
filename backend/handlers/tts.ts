@@ -1,15 +1,8 @@
-import {
-  SpeechConfig,
-  SpeechSynthesizer,
-  SpeechSynthesisOutputFormat,
-} from "microsoft-cognitiveservices-speech-sdk";
-
 import { Configuration, OpenAIApi } from "openai";
-const gemini = process.env.GEMINI_API_KEY;
-const configuration = new Configuration(gemini
-  ? { apiKey: gemini, basePath: "https://generativelanguage.googleapis.com/v1beta/openai" }
-  : { apiKey: process.env.OPENAI_API_KEY });
-const model = gemini ? "gemini-3.5-flash-lite" : process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+import { synthesize } from "talking-head-glb/server";
+import { LANGUAGE, PROVIDERS, VOICE } from "../config.ts";
+const { key, basePath, model } = PROVIDERS.find((provider) => process.env[provider.key]) ?? PROVIDERS[PROVIDERS.length - 1];
+const configuration = new Configuration({ apiKey: process.env[key], basePath });
 
 const prompt = `
 I am a laid-back conversationalist, open to chat about anything the user would like.
@@ -52,110 +45,12 @@ export const handler = (event: any, context: any) => {
         emotion = requestBody.emotion ?? 'neutral';
       }
 
-      let style;
-      if (emotion === 'happy')
-        style = 'friendly'; 
-      else if (emotion === 'empathetic')
-        style = 'hopeful'
-      else if (emotion === 'excited')
-        style = 'cheerful'
-      else
-        style = 'chat';
-
-      const speechConfig = SpeechConfig.fromSubscription(
-        process.env.SPEECH_KEY!,
-        process.env.SPEECH_REGION!
-      );
-      speechConfig.speechSynthesisLanguage = "en-US";
-      speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural";
-      speechConfig.speechSynthesisOutputFormat = SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3;
-      const synthesizer = new SpeechSynthesizer(speechConfig);
-      let visemeData = new Array();
-      // 60fps ARKit blendshape coefficients, placed by the frame index Azure
-      // reports so chunks land on a contiguous timeline.
-      const blendShapeFrames: number[][] = [];
-      let audioDataUrl: any;
-
-      synthesizer.visemeReceived = function (s, e) {
-        // With FacialExpression enabled, Azure interleaves two kinds of event:
-        // viseme ids with a real audioOffset, and animation chunks reported at
-        // offset 0. Mixing them corrupts the viseme timeline.
-        if (e.animation) {
-          const chunk = JSON.parse(e.animation);
-          (chunk.BlendShapes ?? []).forEach((frame: number[], i: number) => {
-            blendShapeFrames[chunk.FrameIndex + i] = frame.map((v) => Math.round(v * 100) / 100);
-          });
-          return;
-        }
-        visemeData.push({
-          audioOffset: e.audioOffset,
-          audio_position: e.audioOffset,
-          visemeId: e.visemeId,
-          viseme_id: e.visemeId
-        })
-      };
-
-      // Exact word onsets, so the eval can align a generation against a human
-      // recording word-for-word; inferring alignment from audio lets a wrong
-      // sentence half-fit. Ticks (100ns), same unit as audioOffset above.
-      const words: { text: string; offset: number; duration: number }[] = [];
-      synthesizer.wordBoundary = function (s, e) {
-        words.push({ text: e.text, offset: e.audioOffset, duration: e.duration });
-      };
-
-      let ssmlText = `<speak version='1.0' xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang='en-US'><voice name='en-US-JennyNeural'><mstts:viseme type='FacialExpression'/><mstts:express-as style='${style}'>${text}</mstts:express-as></voice></speak>`;
-
-      synthesizer.speakSsmlAsync(
-        ssmlText,
-        (result) => {
-          // Azure routes cancelled syntheses here too, with no audioData, and
-          // Buffer.from(undefined) then throws a TypeError naming neither the
-          // request nor the cancellation reason.
-          if (!result.audioData) {
-            synthesizer.close();
-            return reject({
-              statusCode: 502,
-              headers: {
-                "access-control-allow-origin": "*",
-              },
-              body: JSON.stringify({
-                error: result.errorDetails ?? "Speech synthesis was cancelled with no audio."
-              })
-            })
-          }
-          const audioData = result.audioData;
-          const audioBuffer = Buffer.from(audioData)
-          audioDataUrl = audioBuffer.toString('base64')
-          synthesizer.close();
-          resolve({
-            statusCode: 200,
-            headers: {
-              "access-control-allow-origin": "*",
-            },
-            body: JSON.stringify({
-              audio: audioDataUrl,
-              visemes: visemeData,
-              blendShapeFrames,
-              words,
-              text,
-              emotion
-            })
-          })
-        },
-        (error) => {
+      synthesize({ text, emotion }, { key: process.env.SPEECH_KEY!, region: process.env.SPEECH_REGION!, voice: VOICE, language: LANGUAGE })
+        .then((speech) => resolve({ statusCode: 200, headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ ...speech, text, emotion }) }))
+        .catch((error: Error) => {
           console.error(error);
-          synthesizer.close();
-          reject({
-            statusCode: 500,
-            headers: {
-              "access-control-allow-origin": "*",
-            },
-            body: JSON.stringify({
-              error: "The tts could not be completed. Try again"
-            })
-          })
-        }
-      );
+          reject({ statusCode: 502, headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ error: error.message }) });
+        });
     }
   })
 };
