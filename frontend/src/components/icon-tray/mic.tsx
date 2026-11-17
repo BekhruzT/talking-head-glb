@@ -2,8 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import MicIcon from "@mui/icons-material/Mic";
-import MicOffIcon from "@mui/icons-material/MicOff";
+import { Mic as MicIcon, MicOff as MicOffIcon } from "@mui/icons-material";
 
 export enum MicState {
   ON,

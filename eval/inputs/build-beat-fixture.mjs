@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { AZURE_BLENDSHAPE_NAMES, STREAM_FPS } from "../../frontend/src/components/avatar/blendshape-stream.ts";
+import { AZURE_BLENDSHAPE_NAMES, STREAM_FPS } from "../../packages/talking-head/src/avatar/blendshape-stream.ts";
 import { CLIPS, caseId, caseDir } from "./download-corpus.mjs";
 
 // BEAT sessions open with 1.5-4s of dead air and end wherever the wall clock

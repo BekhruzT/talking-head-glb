@@ -15,8 +15,6 @@ import { resolveRig } from "./rig";
 import { lipsyncTime } from "./lipsync-clock";
 import { AZURE_BLENDSHAPE_NAMES, SPEECH_CHANNEL_NAMES, normalizeFrames, sampleFrame } from "./blendshape-stream";
 import { ambientMotionEnabled, motionChannel, MotionSettings } from "./motion-settings";
-import "./avatar.css";
-
 
 export type VisemeId =
   | 0
@@ -56,6 +54,9 @@ export interface GlbAvatarProps {
   randomExpressions: string[];
   camera?: any;
   position?: any;
+  neck: { pitch: number; yaw: number };
+  // Added to the height of a model auto-placed on its head bone.
+  headOffset: number;
   rotation?: any;
   visemes?: VisemeData[];
   abortLipsync?: boolean;
@@ -110,10 +111,6 @@ function randomDuration(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1) + min) * 1000;
 }
 
-// Radians per unit of Ava's neck shapes, measured off her HeadDown/TrunLeft
-// morph targets, so the same channel values turn a bone-rigged head as far.
-const PITCH_PER_UNIT = 0.5;
-const YAW_PER_UNIT = 0.87;
 const HEAD_BONE = /(^|[\s_:])head$/i;
 
 const Model = ({
@@ -123,6 +120,8 @@ const Model = ({
   blendShapeIndices: defaultIndices,
   randomExpressions,
   position,
+  neck,
+  headOffset,
   rotation,
   visemes,
   currentChatStatus,
@@ -202,8 +201,8 @@ const Model = ({
     if (position || !headBone) return position;
     scene.updateMatrixWorld(true);
     const head = scene.worldToLocal(headBone.getWorldPosition(new Vector3()));
-    return [-head.x, -head.y - 0.09, -head.z];
-  }, [position, headBone, scene]);
+    return [-head.x, -head.y + headOffset, -head.z];
+  }, [position, headBone, scene, headOffset]);
 
   useEffect(() => {
     const probe = new URLSearchParams(window.location.search).has("probe");
@@ -935,8 +934,8 @@ const Model = ({
       if (!turn.rest) turn.rest = headBone.quaternion.clone();
       const parent = headBone.parent.getWorldQuaternion(turn.parent);
       turn.delta.setFromEuler(turn.euler.set(
-        (read("HeadDown") - read("HeadUp")) * PITCH_PER_UNIT,
-        (read("TrunRight") - read("TrunLeft")) * YAW_PER_UNIT,
+        (read("HeadDown") - read("HeadUp")) * neck.pitch,
+        (read("TrunRight") - read("TrunLeft")) * neck.yaw,
         0,
         "YXZ"
       ));
@@ -971,7 +970,8 @@ export const GlbAvatar = ({ camera, ...restProps }: GlbAvatarProps) => {
   function Loader() {
     return (
       <Html center>
-        <div className="loading-spinner"></div>
+        <style>{"@keyframes talking-head-spin { 100% { transform: rotate(360deg); } }"}</style>
+        <div style={{ display: "inline-block", width: 15, height: 15, border: "3px solid rgba(100, 100, 100, 0.3)", borderLeftColor: "rgba(0, 0, 0, 0.9)", borderRadius: "50%", animation: "talking-head-spin 1s linear infinite" }}></div>
       </Html>
     );
   }

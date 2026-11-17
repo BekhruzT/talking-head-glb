@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MotionSettings } from "./avatar/motion-settings";
+import { MotionSettings } from "talking-head-glb";
 import "./motion-controls.css";
 
 type MotionKey = keyof MotionSettings;

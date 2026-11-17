@@ -2,25 +2,19 @@ import { AudioState, AvatarVoice } from "./audio";
 import { Mic, MicState } from "./mic";
 
 export interface IconTrayProps {
-  audioUrl?: string;
-  onAudioEnd?: () => void;
-  onTranscription?: () => void;
+  onTranscription?: (message?: string) => void;
   micState: MicState;
   setMicState: (state: MicState) => void;
   audioState: AudioState;
   setAudioState: (state: AudioState) => void;
-  audioElRef?: { current: HTMLAudioElement | null };
 }
 
 export const IconTray = ({
-  audioUrl,
-  onAudioEnd,
   onTranscription,
   micState,
   setMicState,
-  audioState, 
+  audioState,
   setAudioState,
-  audioElRef
 }: IconTrayProps) => {
   return (
     <div
@@ -36,11 +30,8 @@ export const IconTray = ({
       }}
     >
       <AvatarVoice
-        url={audioUrl}
         state={audioState}
         setState={setAudioState}
-        onEnd={onAudioEnd}
-        elementRef={audioElRef}
       />
       <Mic
         state={micState}
