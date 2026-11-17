@@ -6,7 +6,7 @@
 async (page) => {
   if (page.__rigCheckRunning) return "sweep already running; watch eval/rig-results.json";
   page.__rigCheckRunning = true;
-  const heads = ["", "medical-female-01", "medical-male-01", "business-female-02", "business-male-03", "ict-facekit"];
+  const heads = ["ava/ava", "rocketbox/medical-female-01", "rocketbox/medical-male-01", "rocketbox/business-female-02", "rocketbox/business-male-03", "ict/ict-facekit"];
   const results = { done: false };
   const save = () => fetch("http://localhost:4100/upload?name=rig-results.json", { method: "POST", body: JSON.stringify(results, null, 2) });
   const open = async (query) => {
@@ -17,20 +17,20 @@ async (page) => {
   };
   (async () => {
     for (const model of heads) {
-      const tag = model || "ava";
-      const query = model ? `&model=${model}` : "";
+      const tag = model.split("/")[1];
+      const query = `&model=${model}`;
       const out = (results[tag] = {});
       try {
         await open(query);
         out.rig = await page.evaluate(() => ({ channels: Object.keys(__avatar.indices).length, headBone: __avatar.headBone?.name ?? null, missing: ["jawOpen", "eyeBlinkLeft", "mouthSmileLeft", "eyeLookUpLeft", "aa_02", "p_b_m_21", "HeadUp", "TrunLeft"].filter((n) => !(n in __avatar.indices)) }));
         await page.waitForTimeout(1500);
         await page.evaluate((t) => shot(`rig-${t}-frame.png`), tag);
-        out.idle = await page.evaluate(() => probeIdle(12000));
+        out.idle = await page.evaluate((t) => probeIdle(12000, t), tag);
         // A real click, so the page has the user activation audio.play() needs.
         await page.locator("button:has(svg[data-testid^='MicOff'])").click();
-        out.speech = await page.evaluate(() => probeSpeech("etf01"));
+        out.speech = await page.evaluate((t) => probeSpeech("etf01", { tag: t }), tag);
         await page.waitForTimeout(1500);
-        out.visemes = await page.evaluate(() => probeSpeech("etf01", { visemesOnly: true }));
+        out.visemes = await page.evaluate((t) => probeSpeech("etf01", { visemesOnly: true, tag: t }), tag);
         await open(`${query}&noExpressions=1&noHeadMovement=1`);
         out.idleMotionOff = await page.evaluate((t) => probeIdle(8000, `${t}-motion-off`), tag);
       } catch (err) {
@@ -42,5 +42,5 @@ async (page) => {
     await save();
     page.__rigCheckRunning = false;
   })();
-  return { started: heads.map((h) => h || "ava") };
+  return { started: heads };
 }

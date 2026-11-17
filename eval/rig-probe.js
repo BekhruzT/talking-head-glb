@@ -3,7 +3,7 @@
 // frame uploads. Load the app with ?probe, paste this file, run stubMic(), then
 // click the mic for real (the click is what lets the voice autoplay) and run:
 //
-//   http://localhost:3000/?probe&model=medical-female-01
+//   http://localhost:3000/?probe&model=rocketbox/medical-female-01
 //   await probeIdle(16000)      // blinks, gaze, expressions, neck while idle
 //   await probeSpeech("etf01")  // replays the fixture, scores the mouth
 //
@@ -41,7 +41,7 @@ function headAngle(q0) {
   return q && q0 ? 2 * Math.acos(Math.min(1, Math.abs(q.dot(q0)))) : 0;
 }
 
-async function probeIdle(ms, tag = new URLSearchParams(location.search).get("model") || "ava") {
+async function probeIdle(ms, tag = new URLSearchParams(location.search).get("model")?.split("/").pop() || "ava") {
   const q0 = rig().headBone?.quaternion.clone();
   const peak = Object.fromEntries(Object.keys(GROUPS).map((g) => [g, 0]));
   let bone = 0, frames = 0, shotBlink = false, shotNeck = false;
@@ -106,7 +106,7 @@ async function probeSharedViseme(id) {
 // distinct viseme shapes actually moved rather than by correlation. The etf
 // fixtures carry only placeholder visemes, so this walks every Azure viseme id
 // at a speaking pace instead; it proves each shape drives the head, not sync.
-async function probeSpeech(id, { visemesOnly = false, tag = new URLSearchParams(location.search).get("model") || "ava" } = {}) {
+async function probeSpeech(id, { visemesOnly = false, tag = new URLSearchParams(location.search).get("model")?.split("/").pop() || "ava" } = {}) {
   const fixture = await fetch(`${EVAL}/fixture?id=${id}`).then((r) => r.json());
   if (visemesOnly) {
     delete fixture.blendShapeFrames;

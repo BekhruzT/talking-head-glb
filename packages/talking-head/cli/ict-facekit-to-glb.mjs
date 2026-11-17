@@ -1,19 +1,13 @@
-// Builds frontend/public/models/ict/ict-facekit.glb from USC ICT-FaceKit (MIT,
-// https://github.com/ICT-VGL/ICT-FaceKit): the neutral head plus its 53 ARKit
-// expressions as morph targets, flat-coloured since the free kit ships no textures.
-//
-//   node scripts/ict-facekit-to-glb.mjs [cacheDir]
-//
-// ponytail: downloads ~140MB of OBJs once into cacheDir (default: OS temp).
+// Builds a flat-coloured GLB of USC ICT-FaceKit (MIT), its 53 ARKit expressions as morph targets; `talking-head-glb heads add ict/ict-facekit` runs it.
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 const SOURCE = "https://raw.githubusercontent.com/ICT-VGL/ICT-FaceKit/master/FaceXModel";
-const CACHE = process.argv[2] ?? join(tmpdir(), "ict-facekit");
-const OUT = join(dirname(fileURLToPath(import.meta.url)), "../frontend/public/models/ict/ict-facekit.glb");
+const OUT = process.argv[2];
+const CACHE = process.argv[3] ?? join(tmpdir(), "ict-facekit"); // ponytail: downloads ~140MB of OBJs once into this folder.
+if (!OUT) throw new Error("Usage: node cli/ict-facekit-to-glb.mjs <out.glb> [cacheDir]");
 
 // Material groups -> primitive, colours in sRGB. M_Iris* is the whole eyeball,
 // which the kit's textures paint; here it gets vertex colours instead. Skipped,
@@ -206,7 +200,7 @@ const primitives = PARTS.map((part, material) => {
 });
 
 const gltf = {
-  asset: { version: "2.0", generator: "talking-head-glb scripts/ict-facekit-to-glb.mjs", copyright: "ICT-FaceKit, USC Institute for Creative Technologies, MIT" },
+  asset: { version: "2.0", generator: "talking-head-glb cli/ict-facekit-to-glb.mjs", copyright: "ICT-FaceKit, USC Institute for Creative Technologies, MIT" },
   scene: 0,
   scenes: [{ nodes: [0] }],
   // "Head" is a plain node, not a bone: the app turns it for neck movement.

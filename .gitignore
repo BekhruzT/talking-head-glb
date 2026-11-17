@@ -1,7 +1,8 @@
 build/
+dist/
 node_modules/
 *.glb
-frontend/public/models/ava/
+frontend/public/heads/
 .env
 frontend/.env.local
 .DS_Store
