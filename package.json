@@ -1,7 +1,15 @@
 {
-  "name": "talking-head-glb",
+  "name": "talking-head-glb-repo",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "packages/*"
+  ],
+  "overrides": {
+    "three": "^0.154.0"
+  },
   "scripts": {
-    "setup:model": "node scripts/setup-model.mjs"
+    "heads": "node --conditions=source packages/talking-head/cli/talking-head.mjs heads --dir frontend/public/heads"
   }
 }
